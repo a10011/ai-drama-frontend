@@ -22,3 +22,10 @@ yarn-error.log*
 
 # Build
 *.tsbuildinfo
+.bak
+*.bak_*
+*.bak.*
+src.bak./*
+videos/
+public/*.mp4
+public/*.wav
