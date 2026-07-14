@@ -1,0 +1,614 @@
+<template>
+  <div class="media-lib-page">
+    <div class="media-lib-header">
+      <h2>📂 素材库</h2>
+      <p class="media-lib-sub">所有生成的图片、配音、BGM、视频都在这里，可供后续复用</p>
+      <div class="media-lib-stats">
+        <span class="media-stat" v-for="s in stats" :key="s.label">
+          <i :class="s.icon"></i> {{ s.label }}: <strong>{{ s.count }}</strong>
+        </span>
+      </div>
+    </div>
+
+    <!-- 筛选 -->
+    <div class="media-filters">
+      <button v-for="t in typeFilters" :key="t.key"
+        class="media-filter-btn" :class="{ active: filterType === t.key }"
+        @click="filterType = t.key; loadMedia(1)">
+        <i :class="t.icon"></i> {{ t.label }}
+      </button>
+    </div>
+
+    <!-- 媒体库上传区域 -->
+    <div class="media-upload-section">
+      <h3 class="media-upload-title">📤 上传素材到媒体库</h3>
+      <div class="media-upload-box">
+        <div class="media-upload-dropzone" @click="triggerMediaUpload" @dragover.prevent @drop.prevent="handleMediaDrop">
+          <i class="fas fa-cloud-upload-alt"></i>
+          <span>点击或拖拽文件上传</span>
+          <span class="media-upload-hint">支持 JPG / PNG / GIF / MP4 / MP3 / WAV</span>
+        </div>
+        <input type="file" ref="mediaUploadInput" accept="image/*,video/*,audio/*" multiple @change="handleMediaFileSelect" style="display:none" />
+
+        <div class="media-upload-queue" v-if="uploadQueue.length > 0">
+          <div class="media-queue-header">待上传文件 ({{ uploadQueue.length }})</div>
+          <div v-for="(f, fi) in uploadQueue" :key="fi" class="media-queue-item">
+            <div class="media-queue-preview">
+              <img v-if="f.type.startsWith('image/')" :src="f.preview" alt="" />
+              <i v-else-if="f.type.startsWith('video/')" class="fas fa-film media-queue-icon"></i>
+              <i v-else-if="f.type.startsWith('audio/')" class="fas fa-music media-queue-icon"></i>
+              <i v-else class="fas fa-file media-queue-icon"></i>
+            </div>
+            <div class="media-queue-info">
+              <div class="media-queue-name">{{ f.name }}</div>
+              <div class="media-queue-size">{{ formatSize(f.size) }}</div>
+            </div>
+            <button class="media-queue-remove" @click="uploadQueue.splice(fi, 1)"><i class="fas fa-times"></i></button>
+          </div>
+
+          <div class="media-license">
+            <div class="media-license-header">
+              <label class="media-license-checkbox">
+                <input type="checkbox" v-model="licenseAgreed" />
+                <span>我已阅读并同意</span>
+              </label>
+              <span class="media-license-link" @click="showLicense = !showLicense">
+                素材上传许可协议
+                <i :class="showLicense ? 'fas fa-chevron-up' : 'fas fa-chevron-down'"></i>
+              </span>
+            </div>
+            <div class="media-license-body" v-if="showLicense">
+              <ol>
+                <li>用户上传的素材版权归上传者所有。</li>
+                <li>福建面子信息科技有限公司仅提供存储与分发服务。</li>
+                <li>用户承诺上传内容不侵犯第三方合法权益，不违反法律法规。</li>
+                <li>本公司有权对违规内容进行下架处理，无需事先通知。</li>
+                <li>本公司不对用户上传内容的真实性、合法性承担任何责任。</li>
+                <li>用户上传即视为授权本公司在平台范围内展示和使用该素材。</li>
+                <li>本协议最终解释权归福建面子信息科技有限公司所有。</li>
+              </ol>
+            </div>
+          </div>
+
+          <div class="media-upload-progress-wrap" v-if="uploading">
+            <div class="media-upload-progress-bar">
+              <div class="media-upload-progress-fill" :style="{ width: uploadProgress + '%' }"></div>
+            </div>
+            <span class="media-upload-progress-text">{{ uploadProgressText }}</span>
+          </div>
+
+          <button class="btn btn-primary media-upload-btn" @click="startMediaUpload" :disabled="!licenseAgreed || uploading">
+            <i class="fas fa-upload"></i>
+            {{ uploading ? '上传中...' : '确认上传 (' + uploadQueue.length + ' 个文件)' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 加载状态 -->
+    <div v-if="loading" class="media-empty">
+      <p>加载中...</p>
+    </div>
+
+    <!-- 错误状态 -->
+    <div v-else-if="loadError" class="media-empty">
+      <i class="fas fa-exclamation-triangle"></i>
+      <p>加载失败</p>
+      <button class="btn btn-primary" style="margin-top:12px" @click="loadMedia(1)">重试</button>
+    </div>
+
+    <!-- 列表 -->
+    <div class="media-grid" v-else-if="items.length > 0">
+      <div class="media-card" v-for="item in items" :key="item.id" @click="previewItem(item)">
+        <div class="media-thumb">
+          <img v-if="item.media_type === 'figures' || item.media_type === 'scenes' || item.media_type === 'props'"
+            :data-src="getPublicUrl(item.file_path)" alt="" @error="onImgError($event)" class="lazy-img" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" />
+          <div v-else-if="item.media_type === 'videos'" class="media-thumb-video">
+            <i class="fas fa-film"></i>
+          </div>
+          <div v-else-if="item.media_type === 'audio'" class="media-thumb-audio">
+            <i class="fas fa-microphone"></i>
+          </div>
+          <div v-else-if="item.media_type === 'bgm'" class="media-thumb-bgm">
+            <i class="fas fa-music"></i>
+          </div>
+          <div v-else class="media-thumb-other">
+            <i class="fas fa-file"></i>
+          </div>
+        </div>
+        <div class="media-info">
+          <div class="media-name">{{ item.name || item.file_name }}</div>
+          <div class="media-meta">
+            <span class="media-type-badge">{{ item.media_type }}</span>
+            <span class="media-size">{{ formatSize(item.size_bytes) }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div v-else class="media-empty">
+      <i class="fas fa-inbox"></i>
+      <p>暂无素材</p>
+    </div>
+
+    <!-- 分页 -->
+    <div class="media-pager" v-if="totalPages > 1">
+      <button :disabled="page <= 1" @click="loadMedia(page - 1)">上一页</button>
+      <span>第 {{ page }} / {{ totalPages }} 页 (共 {{ total }} 项)</span>
+      <button :disabled="page >= totalPages" @click="loadMedia(page + 1)">下一页</button>
+    </div>
+
+    <!-- 预览弹窗 -->
+    <div class="media-modal-mask" v-if="previewVisible" @click="previewVisible = false">
+      <div class="media-modal" @click.stop>
+        <div class="media-modal-header">
+          <span>{{ previewItemData?.name || previewItemData?.file_name }}</span>
+          <button @click="previewVisible = false"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="media-modal-body">
+          <img v-if="isImage(previewItemData)" :src="getPublicUrl(previewItemData?.file_path)" style="max-width:100%;max-height:500px;border-radius:8px" @error="onImgError($event)" />
+          <video v-else-if="previewItemData?.media_type === 'videos'" :src="getPublicUrl(previewItemData?.file_path)" controls style="max-width:100%;max-height:500px;border-radius:8px"></video>
+          <audio v-else-if="previewItemData?.media_type === 'audio' || previewItemData?.media_type === 'bgm'" :src="getPublicUrl(previewItemData?.file_path)" controls style="width:100%"></audio>
+          <div v-else class="media-modal-file"><i class="fas fa-file"></i> {{ previewItemData?.file_name }}</div>
+        </div>
+        <div class="media-modal-actions">
+          <a :href="getPublicUrl(previewItemData?.file_path)" download class="btn btn-primary" style="text-decoration:none"><i class="fas fa-download"></i> 下载</a>
+          <button class="btn btn-ghost" @click="deleteItem(previewItemData)"><i class="fas fa-trash"></i> 删除</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+export default {
+  data() {
+    return {
+      items: [],
+      total: 0,
+      page: 1,
+      totalPages: 1,
+      filterType: '',
+      loading: true,
+      loadError: false,
+      uploadQueue: [],
+      licenseAgreed: true,
+      showLicense: false,
+      uploading: false,
+      uploadProgress: 0,
+      uploadProgressText: '',
+      stats: [],
+      previewVisible: false,
+      previewItemData: null,
+      typeFilters: [
+        { key: '', label: '全部', icon: 'fas fa-th' },
+        { key: 'figures', label: '角色立绘', icon: 'fas fa-user' },
+        { key: 'scenes', label: '场景图', icon: 'fas fa-image' },
+        { key: 'audio', label: '配音', icon: 'fas fa-microphone' },
+        { key: 'bgm', label: 'BGM', icon: 'fas fa-music' },
+        { key: 'videos', label: '视频', icon: 'fas fa-film' },
+        { key: 'props', label: '道具', icon: 'fas fa-cube' },
+      ]
+    }
+  },
+  mounted() {
+    this.loadMedia()
+    this.loadStats()
+    this._lazyObserver = new IntersectionObserver(function(entries) {
+      entries.forEach(function(entry) {
+        if (entry.isIntersecting) {
+          var img = entry.target
+          var src = img.getAttribute('data-src')
+          if (src) {
+            img.src = src
+            img.removeAttribute('data-src')
+          }
+          this.unobserve(img)
+        }
+      })
+    }.bind(this), { rootMargin: '100px' })
+    this.$nextTick(function() { this.observeLazyImages() })
+  },
+  updated() {
+    this.$nextTick(function() { this.observeLazyImages() })
+  },
+  beforeUnmount() {
+    if (this._lazyObserver) this._lazyObserver.disconnect()
+  },
+  methods: {
+    observeLazyImages() {
+      if (!this._lazyObserver) return
+      var imgs = this.$el.querySelectorAll('img.lazy-img[data-src]')
+      for (var i = 0; i < imgs.length; i++) {
+        this._lazyObserver.observe(imgs[i])
+      }
+    },
+    getPublicUrl(filePath) {
+      if (!filePath) return ''
+      return filePath.replace('/www/wwwroot', '')
+    },
+    formatSize(bytes) {
+      if (!bytes) return '0 B'
+      if (bytes < 1024) return bytes + ' B'
+      if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB'
+      return (bytes / 1048576).toFixed(1) + ' MB'
+    },
+    isImage(item) {
+      return item && (item.media_type === 'figures' || item.media_type === 'scenes' || item.media_type === 'props')
+    },
+    onImgError(e) {
+      var target = e.target || e
+      if (target && target.tagName === 'IMG') {
+        target.src = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="150" viewBox="0 0 200 150"><rect width="200" height="150" fill="var(--bg-card)"/><text x="100" y="75" text-anchor="middle" dominant-baseline="central" font-size="14" fill="var(--text-muted)">图片加载失败</text></svg>')
+      }
+    },
+    triggerMediaUpload() {
+      this.$refs.mediaUploadInput?.click()
+    },
+    handleMediaFileSelect(e) {
+      var files = e.target?.files
+      if (!files) return
+      for (var i = 0; i < files.length; i++) {
+        this.addToUploadQueue(files[i])
+      }
+      e.target.value = ''
+    },
+    handleMediaDrop(e) {
+      var files = e.dataTransfer?.files
+      if (!files) return
+      for (var i = 0; i < files.length; i++) {
+        this.addToUploadQueue(files[i])
+      }
+    },
+    addToUploadQueue(file) {
+      var preview = file.type.startsWith('image/') ? URL.createObjectURL(file) : ''
+      this.uploadQueue.push({ file: file, name: file.name, size: file.size, type: file.type, preview: preview })
+    },
+    async startMediaUpload() {
+      if (!this.licenseAgreed || this.uploadQueue.length === 0) return
+      this.uploading = true
+      this.uploadProgress = 0
+      var successCount = 0
+      var total = this.uploadQueue.length
+      var self = this
+
+      for (var i = 0; i < self.uploadQueue.length; i++) {
+        var item = self.uploadQueue[i]
+        self.uploadProgressText = 'Uploading (' + (i + 1) + '/' + total + '): ' + item.name
+
+        try {
+          var formData = new FormData()
+          formData.append('file', item.file)
+          formData.append('media_type', self.detectMediaType(item.type))
+
+          await new Promise(function(resolve, reject) {
+            var xhr = new XMLHttpRequest()
+            xhr.upload.onprogress = function(e) {
+              if (e.lengthComputable) {
+                var fileProgress = e.loaded / e.total
+                self.uploadProgress = Math.round(((i + fileProgress) / total) * 100)
+              }
+            }
+            xhr.onload = function() {
+              if (xhr.status >= 200 && xhr.status < 300) {
+                successCount++
+                resolve()
+              } else {
+                reject(new Error('HTTP ' + xhr.status))
+              }
+            }
+            xhr.onerror = function() { reject(new Error('Network error')) }
+            xhr.open('POST', '/api/v1/media/upload')
+            var token = localStorage.getItem('token')
+            if (token) xhr.setRequestHeader('Authorization', 'Bearer ' + token)
+            xhr.send(formData)
+          })
+        } catch (e) { console.error('Upload failed:', e) }
+      }
+
+      self.uploading = false
+      self.uploadProgressText = 'Done: ' + successCount + '/' + total + ' files uploaded'
+      self.uploadQueue = []
+
+      setTimeout(function() {
+        self.uploadProgressText = ''
+        self.loadMedia(self.page)
+        self.loadStats()
+      }, 1500)
+    },
+    detectMediaType(mime) {
+      if (mime.startsWith('image/')) return 'figures'
+      if (mime.startsWith('video/')) return 'videos'
+      if (mime.startsWith('audio/')) return 'audio'
+      return 'props'
+    },
+    async loadMedia(p) {
+      if (p) this.page = p
+      this.loading = true
+      this.loadError = false
+      try {
+        const token = localStorage.getItem('token')
+        const params = new URLSearchParams({ page: this.page, page_size: 20 })
+        if (this.filterType) params.set('media_type', this.filterType)
+        const res = await fetch('/api/v1/media/library?' + params.toString(), {
+          headers: { 'Authorization': 'Bearer ' + token }
+        }).then(r => r.json())
+        if (res.success) {
+          this.items = res.data?.items || res.items || []
+          this.total = res.data?.total || res.total || 0
+          this.totalPages = Math.ceil(this.total / 20)
+        } else {
+          this.items = []
+        }
+      } catch (e) {
+        console.error('加载素材失败', e)
+        this.loadError = true
+      }
+      this.loading = false
+    },
+    async loadStats() {
+      try {
+        const token = localStorage.getItem('token')
+        const res = await fetch('/api/v1/media/library?page=1&page_size=50', {
+          headers: { 'Authorization': 'Bearer ' + token }
+        }).then(r => r.json())
+        if (res.success && res.data?.items) {
+          const counts = {}
+          for (const item of res.data.items) {
+            counts[item.media_type] = (counts[item.media_type] || 0) + 1
+          }
+          this.stats = [
+            { label: '角色', icon: 'fas fa-user', count: counts.figures || 0 },
+            { label: '场景', icon: 'fas fa-image', count: counts.scenes || 0 },
+            { label: '视频', icon: 'fas fa-film', count: counts.videos || 0 },
+            { label: '音频', icon: 'fas fa-volume-up', count: (counts.audio || 0) + (counts.bgm || 0) },
+            { label: '道具', icon: 'fas fa-cube', count: counts.props || 0 },
+          ]
+        }
+      } catch(e) { console.error('加载素材统计失败:', e) }
+    },
+    previewItem(item) {
+      this.previewItemData = item
+      this.previewVisible = true
+    },
+    async deleteItem(item) {
+      if (!confirm('确认删除「' + (item.name || item.file_name) + '」？')) return
+      try {
+        const token = localStorage.getItem('token')
+        const res = await fetch('/api/v1/media/library/' + item.id, {
+          method: 'DELETE',
+          headers: { 'Authorization': 'Bearer ' + token }
+        }).then(r => r.json())
+        if (res.success) {
+          this.items = this.items.filter(i => i.id !== item.id)
+          this.previewVisible = false
+        }
+      } catch(e) { console.error('删除素材失败:', e) }
+    }
+  }
+}
+</script>
+
+<style scoped>
+.media-lib-page{padding:24px;min-height:100vh;color:var(--text-primary);font-family:'Inter','Noto Sans SC',-apple-system,sans-serif;width:100%;padding:24px 32px}
+.media-lib-header h2{margin:0;font-size:22px;color:var(--highlight);font-family:'Inter','Noto Sans SC',-apple-system,sans-serif}
+.media-lib-sub{color:var(--text-muted);font-size:12px;margin:6px 0 16px}
+.media-lib-stats{display:flex;gap:20px;flex-wrap:wrap}
+.media-stat{font-size:12px;color:var(--text-secondary)}
+.media-stat strong{color:var(--highlight)}
+.media-filters{display:flex;gap:8px;margin:20px 0;flex-wrap:wrap}
+.media-filter-btn{padding:6px 14px;border:1px solid var(--border);border-radius:20px;background:var(--bg-card);color:var(--text-secondary);cursor:pointer;font-size:11px;transition:all .25s;font-family:'Inter','Noto Sans SC',-apple-system,sans-serif}
+.media-filter-btn:hover{border-color:var(--highlight);color:var(--text-primary)}
+.media-filter-btn.active{background:var(--accent-glow);border-color:var(--highlight);color:var(--highlight)}
+.media-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:16px}
+.media-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;cursor:pointer;transition:all .25s}
+.media-card:hover{border-color:var(--highlight);transform:translateY(-2px);box-shadow:0 4px 20px var(--accent-glow)}
+.media-thumb{width:100%;height:140px;background:var(--bg-input);display:flex;align-items:center;justify-content:center;overflow:hidden}
+.media-thumb img{width:100%;height:100%;object-fit:cover}
+.media-thumb-video,.media-thumb-audio,.media-thumb-bgm,.media-thumb-other{font-size:36px;color:var(--accent-glow)}
+.media-info{padding:10px 12px}.media-name{font-size:12px;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.media-meta{display:flex;gap:8px;align-items:center;margin-top:4px}
+.media-type-badge{font-size:10px;padding:1px 6px;border-radius:8px;background:var(--accent-glow);color:var(--highlight)}
+.media-size{font-size:10px;color:var(--text-muted)}
+.media-empty{text-align:center;padding:80px 20px;color:var(--text-muted)}.media-empty i{font-size:48px;display:block;margin-bottom:12px}
+.media-pager{display:flex;justify-content:center;align-items:center;gap:16px;margin-top:24px}
+.media-pager button{padding:6px 16px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-primary);cursor:pointer;font-family:'Inter','Noto Sans SC',-apple-system,sans-serif;font-size:12px;transition:.25s}
+.media-pager button:hover{border-color:var(--highlight)}.media-pager button:disabled{opacity:.3;cursor:default}
+.media-pager span{font-size:12px;color:var(--text-muted)}
+.media-modal-mask{position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:1000}
+.media-modal{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:24px;max-width:600px;width:90%}
+.media-modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+.media-modal-header span{font-size:15px;color:var(--highlight)}
+.media-modal-header button{background:none;border:none;color:var(--text-secondary);font-size:18px;cursor:pointer}
+.media-modal-body{margin-bottom:16px}.media-modal-actions{display:flex;gap:12px}
+.media-modal-file{text-align:center;padding:60px 20px;color:var(--text-muted);font-size:48px}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 20px;border-radius:var(--radius-sm);font-size:13px;cursor:pointer;border:none;font-family:'Inter','Noto Sans SC',-apple-system,sans-serif}
+.btn-primary{background:linear-gradient(135deg,var(--accent),var(--highlight));color: var(--text-primary);font-weight:bold}
+.btn-ghost{background:var(--bg-card);color:var(--text-secondary);border:1px solid var(--border)}
+
+/* 媒体库上传区域 */
+.media-upload-section {
+  background:var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 24px;
+}
+.media-upload-title {
+  font-size: 16px;
+  color: var(--highlight);
+  margin: 0 0 16px;
+  font-family: 'Inter','Noto Sans SC',-apple-system,sans-serif;
+}
+.media-upload-box {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.media-upload-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 30px 20px;
+  border: 2px dashed rgba(0,255,255,0.2);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all 0.2s;
+  background: var(--accent-glow);
+}
+.media-upload-dropzone:hover {
+  border-color: rgba(0,255,255,0.4);
+  background: rgba(0,255,255,0.04);
+}
+.media-upload-dropzone i {
+  font-size: 32px;
+  color: rgba(0,255,255,0.3);
+}
+.media-upload-dropzone span {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.media-upload-hint {
+  font-size: 11px !important;
+  color: var(--text-muted) !important;
+}
+.media-upload-queue {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+.media-queue-header {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.media-queue-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--bg-input);
+  border-radius: var(--radius-sm);
+  margin-bottom: 6px;
+}
+.media-queue-preview {
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: var(--bg-card);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.media-queue-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.media-queue-icon {
+  font-size: 18px;
+  color: var(--text-muted);
+}
+.media-queue-info {
+  flex: 1;
+  min-width: 0;
+}
+.media-queue-name {
+  font-size: 12px;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.media-queue-size {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+.media-queue-remove {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+.media-queue-remove:hover {
+  color: var(--danger);
+}
+.media-license {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+}
+.media-license-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.media-license-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.media-license-checkbox input[type="checkbox"] {
+  accent-color: var(--highlight);
+}
+.media-license-link {
+  font-size: 11px;
+  color: var(--highlight);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.media-license-body {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.media-license-body ol {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.8;
+}
+.media-upload-progress-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.media-upload-progress-bar {
+  flex: 1;
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.media-upload-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--highlight));
+  border-radius: 3px;
+  transition: width 0.3s;
+}
+.media-upload-progress-text {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  min-width: 80px;
+  text-align: right;
+}
+.media-upload-btn {
+  width: 100%;
+  justify-content: center;
+}
+</style>

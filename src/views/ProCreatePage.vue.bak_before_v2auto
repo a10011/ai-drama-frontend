@@ -1,0 +1,3125 @@
+<template>
+  <div class="pro-create-page">
+    <!-- 左侧导航步骤条 -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <span class="sidebar-icon">📋</span>
+        <h2 class="sidebar-title">专业共创模式</h2>
+        <p class="sidebar-subtitle">步步为营，每一帧皆可精调</p>
+      </div>
+
+      <div class="steps-nav">
+        <div
+          v-for="(step, idx) in steps"
+          :key="step.key"
+          class="step-item"
+          :class="{
+            'step-active': currentStep === idx + 1,
+            'step-done': step.done,
+            'step-disabled': !step.done && currentStep !== idx + 1
+          }"
+          @click="navigateToStep(idx + 1)"
+        >
+          <div class="step-indicator">
+            <span v-if="step.done" class="step-check">✅</span>
+            <span v-else class="step-num">{{ idx + 1 }}</span>
+          </div>
+          <div class="step-info">
+            <span class="step-label">{{ step.label }}</span>
+            <span class="step-desc">{{ step.desc }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 整体进度 -->
+      <div class="sidebar-progress">
+        <div class="progress-header">
+          <span class="progress-title">整体进度</span>
+          <span class="progress-pct">{{ overallPercent }}%</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" :style="{ width: overallPercent + '%' }"></div>
+        </div>
+      </div>
+
+      <!-- 一键生成按钮 -->
+      <div class="sidebar-autogen">
+        <button
+          class="btn-autogen"
+          :disabled="!projectId || autoGenerating"
+          @click="autoGenerate"
+        >
+          <span v-if="autoGenerating" class="spinner"></span>
+          <span v-else>🚀</span>
+          {{ autoGenerating ? '一键生成中...' : '一键生成剩余' }}
+        </button>
+        <p class="autogen-hint" v-if="!projectId">请先保存剧本</p>
+        <p class="autogen-hint" v-else>从当前进度自动跑完所有剩余阶段，失败自动重试</p>
+      </div>
+    </aside>
+
+    <!-- 右侧内容区 -->
+    <main class="content-area">
+      <!-- ═══ 一键生成进度面板 ═══ -->
+      <div v-if="autoGenerating || autoGenDone" class="autogen-panel fade-in">
+        <div class="ag-header">
+          <h3>🚀 一键生成</h3>
+          <span class="ag-status" :class="autoGenStatus">{{ autoGenStatusText }}</span>
+        </div>
+        <div class="ag-stages">
+          <div
+            v-for="s in autoGenStages"
+            :key="s.key"
+            class="ag-stage-item"
+            :class="'ag-' + s.status"
+          >
+            <span class="ag-stage-icon">
+              <span v-if="s.status === 'completed'">✅</span>
+              <span v-else-if="s.status === 'running' || s.status === 'retrying'" class="spinner-sm"></span>
+              <span v-else-if="s.status === 'failed'">❌</span>
+              <span v-else>⏳</span>
+            </span>
+            <div class="ag-stage-info">
+              <span class="ag-stage-label">{{ s.icon }} {{ s.label }}</span>
+              <span v-if="s.status === 'failed'" class="ag-stage-error" :title="s.error">{{ (s.error || '失败').slice(0, 40) }}</span>
+              <span v-if="s.status === 'retrying'" class="ag-stage-retry">重试中...</span>
+            </div>
+          </div>
+        </div>
+        <div v-if="autoGenDone && finalVideoUrl" class="ag-result">
+          <p>🎬 视频已生成完成！</p>
+          <video :src="finalVideoUrl" controls preload="metadata" class="ag-video"></video>
+          <a :href="finalVideoUrl" download class="btn-download">⬇ 下载视频</a>
+        </div>
+      </div>
+
+      <!-- ═══ Step 1: 剧本编辑 ═══ -->
+      <div v-if="currentStep === 1" class="step-panel fade-in">
+        <div class="panel-header">
+          <h3 class="panel-title">📝 剧本编辑</h3>
+          <p class="panel-sub">输入创意或粘贴故事，AI 帮你打磨</p>
+        </div>
+
+        <div class="script-section">
+          <textarea
+            v-model="scriptText"
+            class="script-textarea"
+            placeholder="输入剧本创意或粘贴你的故事..."
+            rows="10"
+            maxlength="5000"
+          ></textarea>
+
+          <div class="script-actions">
+            <button
+              class="btn btn-ai"
+              :disabled="!scriptText.trim() || aiBusy"
+              @click="triggerAIScript"
+            >
+              <span v-if="aiBusy" class="spinner"></span>
+              <span v-else>🎬</span>
+              AI辅助创作
+            </button>
+            <button
+              class="btn btn-manual"
+              @click="isManualMode = true"
+            >
+              📝 手动编写
+            </button>
+          </div>
+
+          <div class="save-row">
+            <button
+              class="btn btn-save"
+              :disabled="!scriptText.trim() || savingScript || directorLoading"
+              @click="saveScript"
+            >
+              <span v-if="savingScript" class="spinner"></span>
+              <span v-else>💾</span>
+              {{ directorLoading ? '导演分析中...' : '保存并下一步' }}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ Step 2: 角色设计 ═══ -->
+      <div v-if="currentStep === 2" class="step-panel fade-in">
+        <div class="panel-header">
+          <h3 class="panel-title">🎭 角色设计</h3>
+          <p class="panel-sub">AI 自动提取角色，编辑属性一键生成肖像</p>
+        </div>
+
+        <!-- 剧本摘要 -->
+        <div class="script-summary" v-if="scriptText">
+          <span class="summary-label">剧本摘要</span>
+          <p class="summary-text">{{ scriptText.slice(0, 120) }}{{ scriptText.length > 120 ? '...' : '' }}</p>
+        </div>
+
+        <!-- 角色提取 -->
+        <div class="extract-row" v-if="!characters.length">
+          <button
+            class="btn btn-ai"
+            :disabled="extracting"
+            @click="extractCharacters"
+          >
+            <span v-if="extracting" class="spinner"></span>
+            <span v-else>🎭</span>
+            AI 提取角色
+          </button>
+        </div>
+
+        <!-- 角色卡片网格 -->
+        <div v-if="characters.length" class="char-grid">
+          <div
+            v-for="(char, cIdx) in characters"
+            :key="cIdx"
+            class="char-card"
+          >
+            <!-- 肖像预览 -->
+            <div class="char-avatar-wrapper">
+              <div v-if="char.portrait_url" class="char-portrait">
+                <img :src="char.portrait_url" :alt="char.name" loading="lazy" @click="previewImage(char.portrait_url)" />
+              </div>
+              <div v-else-if="char.ref_image" class="char-portrait">
+                <img :src="char.ref_image" :alt="char.name" loading="lazy" @click="previewImage(char.ref_image)" />
+              </div>
+              <div v-else class="char-portrait placeholder-portrait">
+                <span>{{ char.name ? char.name[0] : '?' }}</span>
+              </div>
+              <button
+                class="btn-portrait"
+                :disabled="generatingPortrait === cIdx"
+                @click="generatePortrait(cIdx)"
+              >
+                <span v-if="generatingPortrait === cIdx" class="spinner-sm"></span>
+                
+                生成肖像
+              </button>
+              <button class="btn-upload" @click="triggerUpload(cIdx)">上传</button>
+              <button class="btn-library" @click="openMediaPicker(cIdx)">素材库</button>
+              <input type="file" :ref="'fileInput' + cIdx" accept="image/*" hidden @change="handleUpload($event, cIdx)" />
+            </div>
+
+            <!-- 可编辑属性 -->
+            <div class="char-fields">
+              <div class="char-field">
+                <label>姓名</label>
+                <input v-model="char.name" placeholder="角色名" />
+              </div>
+              <div class="char-field">
+                <label>性别</label>
+                <select v-model="char.gender">
+                  <option value="男">男</option>
+                  <option value="女">女</option>
+                  <option value="其他">其他</option>
+                </select>
+              </div>
+              <div class="char-field">
+                <label>性格</label>
+                <textarea v-model="char.personality" placeholder="性格描述" rows="2"></textarea>
+              </div>
+              <div class="char-field">
+                <label>外貌</label>
+                <textarea v-model="char.appearance" placeholder="外貌描述" rows="2"></textarea>
+              </div>
+            </div>
+
+            <div class="char-actions">
+              <button class="btn-char-del" @click="removeCharacter(cIdx)">🗑️ 删除</button>
+            </div>
+          </div>
+
+          <!-- 添加角色 -->
+          <div class="char-card char-add-card" @click="addCharacter">
+            <span class="add-icon">+</span>
+            <span>添加角色</span>
+          </div>
+        </div>
+
+        <div class="step-actions" v-if="characters.length">
+          <button
+            class="btn btn-save"
+            :disabled="savingChars"
+            @click="saveCharacters"
+          >
+            <span v-if="savingChars" class="spinner"></span>
+            <span v-else>💾</span>
+            保存并下一步
+          </button>
+        </div>
+      </div>
+
+      <!-- 素材库弹窗 -->
+      <div v-if="showMediaPicker" class="media-picker-overlay" @click.self="closeMediaPicker">
+        <div class="media-picker-modal">
+          <div class="media-picker-header">
+            <h3>素材库</h3>
+            <button class="media-picker-close" @click="closeMediaPicker">X</button>
+          </div>
+          <div class="media-picker-tabs">
+            <button :class="(mediaTab === 'mine') ? 'tab-btn active' : 'tab-btn'" @click="mediaTab='mine'; loadMediaItems()">我的素材</button>
+            <button :class="(mediaTab === 'public') ? 'tab-btn active' : 'tab-btn'" @click="mediaTab='public'; loadMediaItems()">公共素材</button>
+          </div>
+          <div v-if="!mediaLoading" class="media-picker-content">
+            <div v-if="mediaItems.length === 0" class="media-picker-empty">暂无素材</div>
+            <div class="media-picker-grid">
+              <div v-for="(item, mi) in mediaItems" :key="item.id || mi" class="media-picker-item" :class="item.selected ? 'selected' : ''" @click="selectMediaItem(mi)">
+                <img :src="item.file_url || item.url || item.thumbnail_url || (item.file_path ? ('/storage/' + item.file_path.replace(/^\/+/, '')) : '')" />
+                <div v-if="item.selected" class="media-item-check">OK</div>
+              </div>
+            </div>
+          </div>
+          <div v-else class="media-picker-loading"><div class="spinner"></div><p>加载中</p></div>
+          <div class="media-picker-footer">
+            <button class="btn-cancel" @click="closeMediaPicker">取消</button>
+            <button class="btn-primary" @click="confirmMediaSelect">确认</button>
+          </div>
+        </div>
+      </div>
+      <!-- ═══ Step 3: 分镜规划 ═══ -->
+      <div v-if="currentStep === 3" class="step-panel fade-in">
+        <div class="panel-header">
+          <h3 class="panel-title">📋 分镜规划</h3>
+          <p class="panel-sub">AI 生成分镜列表，拖拽排序，批量生成场景图</p>
+        </div>
+
+        <div class="shot-toolbar" v-if="!shots.length">
+          <button
+            class="btn btn-ai"
+            :disabled="generatingShots"
+            @click="generateShots"
+          >
+            <span v-if="generatingShots" class="spinner"></span>
+            <span v-else>📋</span>
+            AI 生成分镜
+          </button>
+        </div>
+
+        <!-- 分镜网格 -->
+        <div v-if="shots.length" class="shot-grid" ref="shotGrid">
+          <div
+            v-for="(shot, sIdx) in shots"
+            :key="shot.id || sIdx"
+            class="shot-card"
+            draggable="true"
+            @dragstart="onDragStart($event, sIdx)"
+            @dragover.prevent="onDragOver($event, sIdx)"
+            @drop="onDrop($event, sIdx)"
+          >
+            <div class="shot-order">{{ sIdx + 1 }}</div>
+            <div class="shot-thumb">
+              <div v-if="shot.scene_image_url" class="shot-img-wrapper">
+                <img :src="shot.scene_image_url" :alt="'分镜' + (sIdx+1)" loading="lazy" style="cursor:pointer" @click="previewImage(shot.scene_image_url)" />
+              </div>
+              <div v-else class="shot-img-placeholder">
+                <span>🎬</span>
+              </div>
+            </div>
+            <div class="shot-info">
+              <div class="shot-scene-name" v-if="shot.scene || shot.location">
+                🎬 {{ shot.scene || '' }}<span v-if="shot.location"> · 📍 {{ shot.location }}</span>
+              </div>
+              <div class="shot-edit-wrap">
+                <label>描述</label>
+                <textarea v-model="shot.description" rows="2" class="shot-textarea" @input="markShotDirty(sIdx)"></textarea>
+              </div>
+              <div class="shot-edit-wrap">
+                <label>台词</label>
+                <textarea v-model="shot.dialogue" rows="1" class="shot-textarea" @input="markShotDirty(sIdx)" placeholder="无台词留空"></textarea>
+              </div>
+              <div class="shot-meta">
+                <span class="meta-tag">{{ shot.shot_type || shot.camera || '中景' }}</span>
+                <span class="meta-tag">{{ shot.camera_movement || '' }}</span>
+                <span class="meta-tag">{{ shot.duration || shot.duration_sec || '5s' }}</span>
+              </div>
+              <button class="btn-save-shot" :disabled="savingShotIdx === sIdx" @click="saveShotEdit(sIdx)">
+                <span v-if="savingShotIdx === sIdx" class="spinner-xs"></span>
+                <span v-else>💾</span>
+              </button>
+            </div>
+            <div class="shot-actions">
+              <button class="btn-scene-gen" :disabled="genSceneIdx === sIdx" @click.stop="generateSceneImage(sIdx)">
+                <span v-if="genSceneIdx === sIdx" class="spinner-sm"></span>
+                <span v-else>🖼️</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="step-actions" v-if="shots.length">
+          <button
+            class="btn btn-ai"
+            :disabled="batchGeneratingScenes"
+            @click="batchGenerateScenes"
+          >
+            <span v-if="batchGeneratingScenes" class="spinner"></span>
+            <span v-else>🖼️</span>
+            批量生成场景图
+          </button>
+          <button
+            class="btn btn-save"
+            :disabled="savingShots"
+            @click="saveShots"
+          >
+            <span v-if="savingShots" class="spinner"></span>
+            <span v-else>💾</span>
+            保存并下一步
+          </button>
+        </div>
+      </div>
+
+            <!-- ═══ Step 4: 逐镜精修 ═══ -->
+      <div v-if="currentStep === 4 && shots.length" class="step-panel fade-in">
+        <div class="panel-header">
+          <h3 class="panel-title">🎬 逐镜精修</h3>
+          <p class="panel-sub">逐个检查、编辑镜头 ✦ 单镜生成 ✦ 满意再向下</p>
+        </div>
+
+        <div class="single-shot-nav">
+          <button @click="prevShot" :disabled="currentShotIdx === 0" class="btn-nav">◀ 上一个</button>
+          <span class="nav-label">镜头 {{ currentShotIdx+1 }}/{{ shots.length }}</span>
+          <button @click="nextShot" :disabled="currentShotIdx >= shots.length-1" class="btn-nav">下一个 ▶</button>
+        </div>
+
+        <div class="single-shot-main">
+          <div class="single-shot-preview">
+            <template v-if="shots[currentShotIdx].videoStatus === 'generating'">
+              <div class="preview-generating">
+                <div class="spinner-lg"></div>
+                <p>seedance 生成中...约1分钟</p>
+              </div>
+            </template>
+            <template v-else-if="shots[currentShotIdx].video_url">
+              <video :src="shots[currentShotIdx].video_url" autoplay loop muted class="preview-video" style="max-width:100%;max-height:480px;border-radius:8px;"></video>
+            </template>
+            <template v-else-if="shots[currentShotIdx].scene_image_url">
+              <img :src="shots[currentShotIdx].scene_image_url" class="preview-image" />
+            </template>
+            <template v-else>
+              <div class="preview-empty">
+                <span>🎬</span>
+                <p>点击「生成此镜头视频」开始生成</p>
+              </div>
+            </template>
+          </div>
+
+          <div class="single-shot-edit">
+            <div class="edit-meta" v-if="shots[currentShotIdx].scene || shots[currentShotIdx].location">
+              <span class="meta-badge">{{ shots[currentShotIdx].scene || '' }}</span>
+              <span class="meta-badge" v-if="shots[currentShotIdx].location">{{ shots[currentShotIdx].location }}</span>
+              <span class="meta-badge emotion-badge" v-if="shots[currentShotIdx].emotion">{{ shots[currentShotIdx].emotion }}</span>
+            </div>
+            <div class="edit-tags-row">
+              <span class="edit-tag">景别: {{ shots[currentShotIdx].shot_type || '中景' }}</span>
+              <span class="edit-tag">运镜: {{ shots[currentShotIdx].camera_movement || '固定' }}</span>
+              <span class="edit-tag">时长: {{ shots[currentShotIdx].duration_sec || 8 }}s</span>
+              <span class="edit-tag" v-if="shots[currentShotIdx].camera_angle">角度: {{ shots[currentShotIdx].camera_angle }}</span>
+              <span class="edit-tag" v-if="shots[currentShotIdx].lighting">光线: {{ shots[currentShotIdx].lighting }}</span>
+            </div>
+            <label>镜头描述</label>
+            <textarea v-model="shots[currentShotIdx].description" rows="3" class="shot-textarea"></textarea>
+            <label>台词</label>
+            <textarea v-model="shots[currentShotIdx].dialogue" rows="2" class="shot-textarea" placeholder="无台词留空"></textarea>
+            <div class="director-info" v-if="shots[currentShotIdx].director_shot">
+              <label>导演机位单</label>
+              <div class="director-shot-box">{{ shots[currentShotIdx].director_shot }}</div>
+            </div>
+            <div class="director-info" v-if="shots[currentShotIdx].sound_design">
+              <label>音效设计</label>
+              <div class="sound-design-box">{{ shots[currentShotIdx].sound_design }}</div>
+            </div>
+            <button class="btn-save-shot" :disabled="savingShotIdx === currentShotIdx" @click="saveShotEdit(currentShotIdx)">
+              <span v-if="savingShotIdx === currentShotIdx" class="spinner-xs"></span>
+              <span v-else>保存修改</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="single-shot-actions">
+          <button class="btn btn-ai btn-lg"
+            :disabled="singleGenerating"
+            @click="generateSingleVideo">
+            <span v-if="singleGenerating" class="spinner"></span>
+            <span v-else>🎬</span>
+            {{ singleGenerating ? '生成中...约1分钟' : '生成此镜头视频' }}
+          </button>
+          <button class="btn btn-ai btn-lg" v-if="shots[currentShotIdx].video_url"
+            @click="generateSingleVideo">
+            🔁 重新生成
+          </button>
+          <button class="btn btn-manual btn-lg" @click="nextShot"
+            v-if="currentShotIdx < shots.length-1">
+            ✅ 满意，下一个 ▶
+          </button>
+        </div>
+
+        <div class="shot-progress-bar">
+          <span
+            v-for="(shot, i) in shots"
+            :key="i"
+            class="shot-progress-dot"
+            :class="{
+              'dot-done': shot.videoStatus === 'completed' || shot.video_url,
+              'dot-current': i === currentShotIdx,
+              'dot-failed': shot.videoStatus === 'failed',
+              'dot-generating': shot.videoStatus === 'generating'
+            }"
+            @click="currentShotIdx = i"
+          >{{ i + 1 }}</span>
+        </div>
+
+        <div class="step-actions">
+          <button class="btn btn-save" @click="goToStep5">
+            🎬 全部完成，下一步
+          </button>
+        </div>
+      </div>
+<!-- ═══ Step 5: 合成发布 ═══ -->
+      <div v-if="currentStep === 5" class="step-panel fade-in">
+        <div class="panel-header">
+          <h3 class="panel-title">📦 合成发布</h3>
+          <p class="panel-sub">合并所有分镜视频，导出最终作品</p>
+        </div>
+
+        <!-- 分镜视频预览列表 -->
+        <div class="final-shot-list">
+          <div
+            v-for="(shot, sIdx) in shots"
+            :key="shot.id || sIdx"
+            class="final-shot-item"
+            :class="{ 'has-video': !!shot.video_url }"
+          >
+            <div class="fs-order">{{ sIdx + 1 }}</div>
+            <div class="fs-thumb" @click="previewVideo(shot.video_url)" v-if="shot.video_url">
+              <video :src="shot.video_url" muted preload="metadata"></video>
+              <span class="play-overlay">▶</span>
+            </div>
+            <div class="fs-thumb fs-thumb-placeholder" v-else>
+              <span>❌</span>
+            </div>
+            <div class="fs-info">
+              <p class="fs-desc">{{ shot.description || shot.content || '--' }}</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 合成区域 -->
+        <div class="composite-section">
+          <button
+            class="btn btn-save btn-composite"
+            :disabled="isCompositing"
+            @click="startComposite"
+          >
+            <span v-if="isCompositing" class="spinner"></span>
+            <span v-else>🔗</span>
+            {{ isCompositing ? '合成中...' : '合并视频' }}
+          </button>
+
+          <!-- 合成进度条 -->
+          <div v-if="isCompositing" class="composite-progress">
+            <div class="cp-bar">
+              <div class="cp-fill" :style="{ width: compositeProgress + '%' }"></div>
+            </div>
+            <span class="cp-pct">{{ compositeProgress }}%</span>
+          </div>
+        </div>
+
+        <!-- 最终视频播放器 -->
+        <div v-if="finalVideoUrl" class="final-video-section fade-in">
+          <h4 class="final-video-title">✨ 最终作品</h4>
+          <div class="final-video-wrapper">
+            <video
+              :src="finalVideoUrl"
+              controls
+              playsinline
+              preload="metadata"
+              class="final-video-player"
+            ></video>
+          </div>
+
+          <div class="final-actions">
+            <button class="btn btn-ai" @click="downloadFinalVideo">📥 下载</button>
+            <button class="btn btn-manual" @click="shareFinalVideo">📱 分享</button>
+            <button class="btn btn-manual" @click="resetAll">🔄 重新生成</button>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- 视频预览弹窗 -->
+    <div v-if="videoPreviewUrl" class="modal-overlay" @click.self="videoPreviewUrl = ''">
+      <div class="modal-card video-modal">
+        <div class="modal-header">
+          <h3>🎬 视频预览</h3>
+          <button class="modal-close" @click="videoPreviewUrl = ''">✕</button>
+        </div>
+        <div class="modal-body">
+          <video
+            :src="videoPreviewUrl"
+            controls
+            playsinline
+            preload="auto"
+            class="preview-video"
+            autoplay
+          ></video>
+        </div>
+      </div>
+    </div>
+  </div>
+
+    <!-- 肖像预览弹窗 -->
+    <div v-if="previewImgUrl" class="modal-overlay" @click.self="previewImgUrl = ''">
+      <div class="modal-card" style="padding:0;background:transparent;box-shadow:none;">
+        <button class="modal-close" style="position:fixed;top:20px;right:30px;z-index:10000;font-size:28px;color:#fff;" @click="previewImgUrl = ''">✕</button>
+        <img :src="previewImgUrl" style="max-width:90vw;max-height:90vh;border-radius:8px;object-fit:contain;" />
+      </div>
+    </div>
+</template>
+
+<script>
+const API = '/api/v1'
+
+async function apiReq(method, path, body, customTimeout) {
+  const token = localStorage.getItem('token')
+  const opts = { method, headers: { 'Content-Type': 'application/json' } }
+  if (token) opts.headers['Authorization'] = 'Bearer ' + token
+  if (body) opts.body = JSON.stringify(body)
+  // 超时时间：生图/视频等长耗时接口需要较长时间
+  const controller = new AbortController()
+  opts.signal = controller.signal
+  const timeoutMs = customTimeout || 1200000  // 统一1200秒，所有接口一样
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const r = await fetch(API + path, opts)
+    clearTimeout(timer)
+    return r.json()
+  } catch(e) {
+    clearTimeout(timer)
+    console.error('apiReq error:', path, e)
+    return { success: false, error: '请求超时或网络错误' }
+  }
+}
+
+export default {
+  name: 'ProCreatePage',
+  data() {
+    return {
+      currentStep: 1,
+      steps: [
+        { key: 'script', label: '剧本编辑', desc: '创作打磨剧本', done: false },
+        { key: 'character', label: '角色设计', desc: '角色提取与肖像', done: false },
+        { key: 'shot', label: '分镜规划', desc: '分镜排序与场景图', done: false },
+        { key: 'video', label: '视频生成', desc: 'AI 逐镜生成', done: false },
+        { key: 'composite', label: '合成发布', desc: '合并导出作品', done: false },
+      ],
+
+      // Step 1
+      scriptText: '',
+      aiBusy: false,
+      savingScript: false,
+      directorLoading: false,
+      isManualMode: false,
+      projectId: null,
+
+      // Step 2
+      characters: [],
+      extracting: false,
+      savingChars: false,
+      generatingPortrait: null,
+      fileInputs: [],
+
+      // Step 3
+      shots: [],
+      generatingShots: false,
+      savingShots: false,
+      genSceneIdx: null,
+      batchGeneratingScenes: false,
+      dragIndex: null,
+      savingShotIdx: -1,
+
+      // Step 4
+      currentShotIdx: 0,
+      singleGenerating: false,
+      generatingVideoIdx: null,
+      generatingVideoBatch: false,
+
+      // Step 5
+      isCompositing: false,
+      compositeProgress: 0,
+      finalVideoUrl: '',
+      compositePollTimer: null,
+
+      // 一键生成
+      autoGenerating: false,
+      autoGenDone: false,
+      autoGenStages: [],
+      autoGenStatus: 'running',
+      autoGenPollTimer: null,
+
+      // 通用
+      videoPreviewUrl: '',
+      previewImgUrl: '',
+      token: '',
+    }
+  },
+  computed: {
+    overallPercent() {
+      const done = this.steps.filter(s => s.done).length
+      return Math.round((done / this.steps.length) * 100)
+    },
+    hasPendingVideos() {
+      return this.shots.some(s => !s.video_url || s.videoStatus === 'pending' || s.videoStatus === 'failed')
+    },
+    allVideosReady() {
+      return this.shots.length > 0 && this.shots.every(s => !!s.video_url && s.videoStatus === 'completed')
+    },
+    autoGenStatusText() {
+      if (this.autoGenStatus === 'completed') return '✅ 全部完成'
+      if (this.autoGenStatus === 'failed') return '❌ 部分失败，请查看'
+      return '⏳ 生成中...'
+    },
+  },
+  mounted() {
+    this.token = localStorage.getItem('token') || ''
+    // 优先读 URL 参数 project_id（从个人中心"继续创作"跳来）
+    const urlProjectId = this.$route && this.$route.query && this.$route.query.project_id
+    const savedProjectId = urlProjectId || localStorage.getItem('pro_project_id')
+    if (savedProjectId) {
+      this.projectId = savedProjectId
+      localStorage.setItem('pro_project_id', savedProjectId)
+      this.loadProject(savedProjectId)
+    }
+  },
+  beforeUnmount() {
+    this.stopCompositePolling()
+  },
+  methods: {
+    navigateToStep(step) {
+      // 允许往回跳 + 往前跳到已完成步骤
+      if (step === this.currentStep) return
+      if (step < this.currentStep || (this.steps[step - 1] && this.steps[step - 1].done)) {
+        this.currentStep = step
+      }
+    },
+
+    // ═══ Step 1: 剧本编辑 ═══
+    async triggerAIScript() {
+      if (!this.scriptText.trim()) return
+      this.aiBusy = true
+      try {
+        const res = await apiReq('POST', '/script/generate', {
+          prompt: this.scriptText,
+        })
+        if (res.success && res.data) {
+          this.scriptText = res.data.script_text || res.data.content || res.data || this.scriptText
+        } else {
+          alert('AI 辅助失败: ' + (res.message || '请重试'))
+        }
+      } catch (e) {
+        console.error('AI script failed:', e)
+        alert('AI 辅助失败: 网络错误')
+      }
+      this.aiBusy = false
+    },
+
+    async saveScript() {
+      if (!this.scriptText.trim()) return
+      this.savingScript = true
+      try {
+        const body = {
+          script_text: this.scriptText,
+          title: this.scriptText.slice(0, 50),
+        }
+        if (this.projectId) body.project_id = this.projectId
+
+        const res = await apiReq('POST', '/projects/create', body)
+        if (res.success) {
+          this.projectId = res.project_id || res.id
+          localStorage.setItem('pro_project_id', this.projectId)
+          this.steps[0].done = true
+          // 保存后自动触发导演分析（导演是统帅，必须先跑）
+          this.directorLoading = true
+          try {
+            const dirRes = await apiReq('POST', '/pipeline/step/' + this.projectId, {
+              stage: 'director',
+              params: { script_text: this.scriptText }
+            }, 120000)
+            if (dirRes.success) {
+              console.log('导演分析完成')
+            } else {
+              console.warn('导演分析失败:', dirRes.error || dirRes.message)
+            }
+          } catch(e) {
+            console.warn('导演分析异常:', e)
+          }
+          this.directorLoading = false
+          this.currentStep = 2
+        } else {
+          const errMsg = res.error || res.message || '余额不足，请先充值'
+          alert('保存失败: ' + errMsg)
+        }
+      } catch (e) {
+        console.error('save script failed:', e)
+        alert('保存失败: 网络错误')
+      }
+      this.savingScript = false
+    },
+
+    // ═══ Step 2: 角色设计 ═══
+    async extractCharacters() {
+      if (!this.projectId) {
+        alert('请先保存剧本')
+        return
+      }
+      this.extracting = true
+      try {
+        const res = await apiReq('POST', '/characters/extract', {
+          project_id: this.projectId,
+          script_text: this.scriptText,
+        })
+        if (res.success && res.data) {
+          const list = res.data.characters || res.data || []
+          this.characters = list.map(c => ({
+            name: c.name || '',
+            gender: c.gender || '男',
+            personality: c.personality || c.description || '',
+            appearance: c.appearance || '',
+            portrait_url: c.portrait_url || '',
+            ref_image: c.ref_image || '',
+          }))
+        } else {
+          alert('角色提取失败: ' + (res.message || '请重试'))
+        }
+      } catch (e) {
+        console.error('extract characters failed:', e)
+        alert('角色提取失败: 网络错误')
+      }
+      this.extracting = false
+    },
+
+    addCharacter() {
+      this.characters.push({
+        name: '',
+        gender: '男',
+        personality: '',
+        appearance: '',
+        portrait_url: '',
+        ref_image: '',
+      })
+    },
+
+    removeCharacter(idx) {
+      this.characters.splice(idx, 1)
+    },
+
+    async generatePortrait(idx) {
+      const char = this.characters[idx]
+      if (!char.name) {
+        alert('请先填写姓名')
+        return
+      }
+      if (!char.ref_image && !char.appearance) {
+        alert('请填写外貌描述或上传参考图')
+        return
+      }
+      // 有参考图时不需要外貌描述
+      this.generatingPortrait = idx
+      try {
+        const genre = localStorage.getItem('__DRAMA_GENRE__') || ''
+        // 直接对接 /characters/portrait：服务端完成 生成+本地化+写DB(portrait_url)
+        const res = await apiReq('POST', '/characters/portrait', {
+          name: char.name,
+          gender: char.gender || 'male',
+          age: char.age || '',
+          personality: char.personality || '',
+          appearance: char.appearance || '',
+          role_type: char.role_type || '',
+          ref_image: char.ref_image || '',
+          genre: genre,
+          project_id: this.projectId,
+        })
+        if (res.success && res.data) {
+          char.portrait_url = res.data.portrait_url || res.data.image_url || ''
+          this.characters = [...this.characters]
+        } else {
+          alert('肖像生成失败: ' + (res.error || '请重试'))
+        }
+      } catch (e) {
+        console.error('portrait generation failed:', e)
+        alert('肖像生成失败: 网络错误')
+      }
+      this.generatingPortrait = null
+    },
+
+    async saveCharacters() {
+      this.savingChars = true
+      try {
+        const res = await apiReq('POST', '/characters/save', {
+          project_id: this.projectId,
+          characters: this.characters,
+        })
+        if (res.success) {
+          this.steps[1].done = true
+          this.currentStep = 3
+        } else {
+          alert('保存角色失败: ' + (res.message || '请重试'))
+        }
+      } catch (e) {
+        console.error('save characters failed:', e)
+        alert('保存角色失败: 网络错误')
+      }
+      this.savingChars = false
+    },
+
+    // ═══ Step 3: 分镜规划 ═══
+    async generateShots() {
+      if (!this.projectId) {
+        alert('请先保存剧本')
+        return
+      }
+      if (this.generatingShots) return  // 防重入
+      this.generatingShots = true
+      try {
+        // 调 /pipeline/step 异步提交，然后轮询进度
+        const res = await apiReq('POST', '/pipeline/step/' + this.projectId, {
+          stage: 'storyboard',
+          params: {
+            script_text: this.scriptText,
+            characters: this.characters,
+            genre: localStorage.getItem('__DRAMA_GENRE__') || '',
+          }
+        })
+        if (!res.success) {
+          alert('分镜启动失败: ' + (res.error || res.message || '请重试'))
+          this.generatingShots = false
+          return
+        }
+        // 后端返回 duplicate=true 表示已有任务在跑，不报错，直接去轮询结果
+        // 轮询进度
+        const sbResult = await this.pollStepResult('storyboard')
+        const shots = (sbResult && sbResult.shots) || []
+        if (shots.length) {
+          this.shots = shots.map(s => ({
+            id: s.id || s.shot_id || s.shot_num || '',
+            description: s.description || s.content || '',
+            dialogue: s.dialogue || '',
+            scene: s.scene || '',
+            location: s.location || '',
+            shot_type: s.shot_type || '',
+            camera: s.camera || s.camera_movement || '中景',
+            duration: (s.duration_sec || s.duration || 5) + 's',
+            scene_image_url: s.scene_image_url || s.image_url || '',
+            director_shot: s.director_shot || '',
+            sound_design: s.sound_design || '',
+            duration_sec: s.duration_sec || 8,
+            camera_angle: s.camera_angle || '',
+            lighting: s.lighting || '',
+            video_url: s.video_url || '',
+            videoStatus: s.videoStatus || 'pending',
+          }))
+        } else {
+          alert('分镜生成失败，请重试')
+        }
+      } catch (e) {
+        console.error('generate shots failed:', e)
+        alert('分镜生成失败: 网络错误')
+      }
+      this.generatingShots = false
+    },
+
+    // 轮询某阶段执行结果，直到 completed/failed
+    // maxWait 默认 280s；video 等慢阶段传更长（如 1500s ≈ 25分钟）
+    // 返回完整 progress data（含顶层 shot_videos 等），不只是 found.data
+    async pollStepResult(stage, maxWait = 280) {
+      const start = Date.now()
+      while (Date.now() - start < maxWait * 1000) {
+        await new Promise(r => setTimeout(r, 3000))
+        try {
+          const res = await apiReq('GET', '/pipeline/progress/' + this.projectId)
+          if (res.success && res.data) {
+            const stages = res.data.stages || res.data.shots || []
+            const found = stages.find(s => s.stage === stage || s.key === stage)
+            if (found) {
+              if (found.status === 'completed') {
+                // 返回合并了顶层字段的 data（shot_videos 等在顶层）
+                const merged = Object.assign({}, found.data || {})
+                if (res.data.shot_videos) merged.shot_videos = res.data.shot_videos
+                if (res.data.shot_video_errors) merged.shot_video_errors = res.data.shot_video_errors
+                if (res.data.final_video_url) merged.final_video_url = res.data.final_video_url
+                return merged
+              }
+              if (found.status === 'failed') {
+                console.error(stage + '生成失败: ' + (found.error || ''))
+                return null
+              }
+              // running：继续轮询，不打断
+            }
+          }
+        } catch (e) {}
+      }
+      // 超时不弹阻塞式 alert，仅控制台提示；后端仍在跑，用户刷新可继续看结果
+      console.warn(stage + ' 轮询超时，后端可能仍在运行')
+      return null
+    },
+
+    // 拖拽排序
+    onDragStart(e, idx) {
+      this.dragIndex = idx
+      e.dataTransfer.effectAllowed = 'move'
+    },
+    onDragOver(e, idx) {
+      e.dataTransfer.dropEffect = 'move'
+    },
+    onDrop(e, idx) {
+      if (this.dragIndex === null || this.dragIndex === idx) return
+      const item = this.shots.splice(this.dragIndex, 1)[0]
+      this.shots.splice(idx, 0, item)
+      this.dragIndex = null
+    },
+
+    async generateSceneImage(sIdx) {
+      const shot = this.shots[sIdx]
+      this.genSceneIdx = sIdx
+      try {
+        const res = await apiReq('POST', '/shot/scene-image', {
+          shot_id: shot.id || sIdx + 1,
+          project_id: this.projectId,
+          description: shot.description,
+        })
+        if (res.success && res.data) {
+          shot.scene_image_url = res.data.scene_image_url || res.data.image_url || ''
+          this.shots = [...this.shots]
+        } else {
+          alert('场景图生成失败: ' + (res.message || '请重试'))
+        }
+      } catch (e) {
+        console.error('scene image failed:', e)
+        alert('场景图生成失败: 网络错误')
+      }
+      this.genSceneIdx = null
+    },
+
+    async batchGenerateScenes() {
+      if (this.batchGeneratingScenes) return  // 防重入
+      this.batchGeneratingScenes = true
+      try {
+        // 对接正式管道 /pipeline/step，stage=scene，批量生成所有场景图
+        const shotsData = this.shots.map((s, i) => ({
+          shot_num: i + 1,
+          description: s.description,
+          scene: s.camera || '',
+          project_id: this.projectId,
+        }))
+        const res = await apiReq('POST', '/pipeline/step/' + this.projectId, {
+          stage: 'scene',
+          params: {
+            shots: shotsData,
+            characters: this.characters,
+            genre: localStorage.getItem('__DRAMA_GENRE__') || '',
+          }
+        })
+        if (!res.success) {
+          alert('场景图启动失败: ' + (res.error || res.message || '请重试'))
+          this.batchGeneratingScenes = false
+          return
+        }
+        // 轮询等完成
+        const sceneData = await this.pollStepResult('scene')
+        if (sceneData) {
+          const images = sceneData.image_map || sceneData.images || {}
+          for (let i = 0; i < this.shots.length; i++) {
+            const img = images[String(i)] || images[i] || ''
+            if (img) {
+              this.shots[i].scene_image_url = img
+            }
+          }
+          this.shots = [...this.shots]
+        } else {
+          alert('场景图生成失败，请重试')
+        }
+      } catch (e) {
+        console.error('batch scene failed:', e)
+        alert('场景图批量生成失败')
+      }
+      this.batchGeneratingScenes = false
+    },
+
+    // == Step 3: 单条分镜保存 ==
+    markShotDirty(sIdx) {
+      // 标记字段有变，留给 Vue 响应式（v-model 已自动同步）
+    },
+    async saveShotEdit(sIdx) {
+      const shot = this.shots[sIdx]
+      if (!shot) return
+      this.savingShotIdx = sIdx
+      try {
+        await apiReq('POST', '/pipeline/step/' + this.projectId, {
+          stage: 'storyboard',
+          action: 'update_shot',
+          params: {
+            shot_index: sIdx,
+            description: shot.description || '',
+            dialogue: shot.dialogue || '',
+          }
+        })
+      } catch(e) {
+        console.error('save shot error:', e)
+      }
+      this.savingShotIdx = -1
+    },
+    async saveShots() {
+      this.savingShots = true
+      try {
+        // 保存分镜到项目（用 characters/save 复用保存逻辑）
+        const res = await apiReq('POST', '/characters/save', {
+          project_id: this.projectId,
+          characters: this.characters,
+        })
+        if (res.success) {
+          this.steps[2].done = true
+          this.currentStep = 4
+        } else {
+          alert('保存分镜失败: ' + (res.message || '请重试'))
+        }
+      } catch (e) {
+        console.error('save shots failed:', e)
+        alert('保存分镜失败: 网络错误')
+      }
+      this.savingShots = false
+    },
+
+    // ═══ Step 4: 视频生成 ═══
+    // 注意：/pipeline/step 是「提交即返回 + 后台跑」，必须用轮询拿结果。
+    // 后端 video 阶段会一次性生成全部镜头，前端点任一镜头的"生成"都触发整批，
+    // 所以用一个 generatingVideoBatch 标志防止重复提交，结果统一回填。
+    async generateVideo(sIdx) {
+      if (this.generatingVideoBatch) return  // 整批已在跑，防重入
+      this.generatingVideoBatch = true
+      this.generatingVideoIdx = sIdx
+      // 标记全部镜头为 generating
+      this.shots.forEach(s => { if (!s.video_url) s.videoStatus = 'generating' })
+      this.shots = [...this.shots]
+      try {
+        const shotsData = this.shots.map((s, i) => ({
+          shot_num: i + 1,
+          description: s.description,
+          scene_image: s.scene_image_url || '',
+          image_url: s.scene_image_url || '',
+          project_id: this.projectId,
+        }))
+        const res = await apiReq('POST', '/pipeline/step/' + this.projectId, {
+          stage: 'video',
+          params: { shots: shotsData, genre: localStorage.getItem('__DRAMA_GENRE__') || '' }
+        })
+        if (!res.success) {
+          alert('视频生成启动失败: ' + (res.error || res.message || '请重试'))
+          this.shots.forEach(s => { if (s.videoStatus === 'generating') s.videoStatus = 'failed' })
+          this.shots = [...this.shots]
+          return
+        }
+        // res.data.duplicate=true 表示后端已有任务在跑，正常情况，直接轮询
+        // 轮询等整批完成（video 慢，给 25 分钟）
+        const vd = await this.pollStepResult('video', 1500)
+        if (vd) {
+          // 优先用后端顶层返回的 shot_videos（已按 shot_index 映射好）
+          const shotVideos = vd.shot_videos || {}
+          const shotErrors = vd.shot_video_errors || {}
+          // 也解析原始 videos 数组兜底
+          const rawVideos = vd.videos || vd.results || []
+          const getVideoUrl = (v) => {
+            if (!v) return ''
+            if (typeof v === 'string') return v
+            return v.video_url || v.url || (v.result && (v.result.video_url || v.result.url)) || ''
+          }
+          const getVideoError = (v) => {
+            if (!v || typeof v === 'string') return ''
+            return v.error || (v.result && v.result.error) || ''
+          }
+          // 先用原始数组
+          if (Array.isArray(rawVideos)) {
+            rawVideos.forEach(v => {
+              const idx = v.shot_index ?? v.shot_num ?? v.index
+              if (idx != null && idx < this.shots.length) {
+                const url = getVideoUrl(v)
+                if (url) {
+                  this.shots[idx].video_url = url
+                  this.shots[idx].videoStatus = 'completed'
+                  this.shots[idx].videoError = ''
+                }
+              }
+            })
+          }
+          // 再用 shot_videos 覆盖（更可靠）
+          Object.keys(shotVideos).forEach(k => {
+            const idx = parseInt(k)
+            if (!isNaN(idx) && idx < this.shots.length && shotVideos[k]) {
+              this.shots[idx].video_url = shotVideos[k]
+              this.shots[idx].videoStatus = 'completed'
+              this.shots[idx].videoError = ''
+            }
+          })
+          // 标记失败的（有 error 的）
+          Object.keys(shotErrors).forEach(k => {
+            const idx = parseInt(k)
+            if (!isNaN(idx) && idx < this.shots.length && !this.shots[idx].video_url) {
+              this.shots[idx].videoStatus = 'failed'
+              this.shots[idx].videoError = shotErrors[k]
+            }
+          })
+          // 仍未拿到 url 且仍在 generating 的标记 failed
+          this.shots.forEach((s, i) => {
+            if (s.videoStatus === 'generating' && !s.video_url) {
+              s.videoStatus = 'failed'
+              s.videoError = s.videoError || '未生成'
+            }
+          })
+        } else {
+          // 轮询超时，不报错，后端仍在跑；保持 generating 让用户可刷新查看
+          console.warn('视频轮询超时，后端可能仍在运行，刷新可查看')
+        }
+        this.shots = [...this.shots]
+      } catch (e) {
+        console.error('video generation failed:', e)
+        this.shots.forEach(s => { if (s.videoStatus === 'generating') s.videoStatus = 'failed' })
+        this.shots = [...this.shots]
+      }
+      this.generatingVideoIdx = null
+      this.generatingVideoBatch = false
+    },
+
+    // == Step 4: 逐镜精修方法 ==
+    prevShot() {
+      if (this.currentShotIdx > 0) this.currentShotIdx--
+    },
+    nextShot() {
+      if (this.currentShotIdx < this.shots.length - 1) this.currentShotIdx++
+    },
+    async saveShotEdit() {
+      const sIdx = this.currentShotIdx
+      const shot = this.shots[sIdx]
+      const res = await apiReq('POST', '/pipeline/step/' + this.projectId, {
+        stage: 'storyboard', action: 'update_shot',
+        params: {
+          shot_index: sIdx,
+          description: shot.description,
+          dialogue: shot.dialogue,
+          shot_type: shot.shot_type,
+          camera_movement: shot.camera_movement,
+          camera_angle: shot.camera_angle,
+          duration_sec: shot.duration_sec,
+          scene: shot.scene,
+          location: shot.location,
+        }
+      })
+      if (res.success) {
+        this.$forceUpdate()
+      }
+    },
+    async generateSingleVideo() {
+      console.log('[generateSingleVideo] 点击', {idx: this.currentShotIdx, generating: this.singleGenerating})
+      if (this.singleGenerating) return
+      const sIdx = this.currentShotIdx
+      if (!this.shots[sIdx]) return
+      // 没场景图自动生成
+      if (!this.shots[sIdx].scene_image_url) {
+        alert('该镜头暂无场景图，正在自动生成...')
+        await this.batchGenerateScenes()
+        if (!this.shots[sIdx].scene_image_url) { alert('场景图生成失败'); return }
+      }
+      this.singleGenerating = true
+      this.shots[sIdx].videoStatus = 'generating'
+      this.shots = [...this.shots]
+      try {
+        // 提交（异步，立即返回 running）
+        const res = await apiReq('POST', '/pipeline/single-video/' + this.projectId, {
+          shot_index: sIdx,
+          shot: {
+            shot_num: sIdx + 1,
+            description: this.shots[sIdx].description || '',
+            scene_image: this.shots[sIdx].scene_image_url || '',
+            image_url: this.shots[sIdx].scene_image_url || '',
+          }
+        })
+        console.log('[generateSingleVideo] 提交返回:', res)
+        // 不管返回什么，开始轮询
+        // 每10秒查一次 progress，最多等20分钟
+        for (let attempt = 0; attempt < 120; attempt++) {
+          await new Promise(r => setTimeout(r, 10000))
+          try {
+            const prog = await apiReq('GET', '/pipeline/progress/' + this.projectId)
+            if (prog.success && prog.data) {
+              const svs = prog.data.shot_videos || {}
+              const url = svs[String(sIdx)] || svs[sIdx] || ''
+              if (url) {
+                this.shots[sIdx].video_url = url
+                this.shots[sIdx].videoStatus = 'completed'
+                this.singleGenerating = false
+                this.shots = [...this.shots]
+                console.log('[generateSingleVideo] 成功!', url)
+                return
+              }
+              // 检查是否失败
+              const stages = prog.data.stages || []
+              const vs = stages.find(s => s.stage === 'video')
+              if (vs && vs.status === 'failed' && vs.data && vs.data.generating_shot !== sIdx) {
+                this.shots[sIdx].videoStatus = 'failed'
+                this.shots[sIdx].videoError = '生成失败'
+                this.singleGenerating = false
+                this.shots = [...this.shots]
+                return
+              }
+            }
+          } catch(e) {}
+        }
+        // 超时
+        this.shots[sIdx].videoStatus = 'failed'
+        this.shots[sIdx].videoError = '超时'
+      } catch(e) {
+        console.error('[generateSingleVideo] error:', e)
+        this.shots[sIdx].videoStatus = 'failed'
+        this.shots[sIdx].videoError = '网络错误'
+      }
+      this.singleGenerating = false
+      this.shots = [...this.shots]
+    },
+    async goToStep5() {
+      // 缺视频自动补齐
+      const missing = this.shots.filter(s => !s.video_url)
+      if (missing.length > 0) {
+        const ok = confirm('还有 ' + missing.length + ' 个镜头没有视频，确定要自动补齐后再合成吗？')
+        if (!ok) return
+        for (let i = 0; i < this.shots.length; i++) {
+          if (!this.shots[i].video_url) {
+            this.currentShotIdx = i
+            await this.generateSingleVideo()
+          }
+        }
+      }
+      this.steps[3].done = true
+      this.currentStep = 5
+    },
+
+    // ═══ 一键生成 ═══
+    async autoGenerate() {
+      if (!this.projectId || this.autoGenerating) return
+      this.autoGenerating = true
+      this.autoGenDone = false
+      this.autoGenStatus = 'running'
+      // 初始化阶段列表（13个阶段）
+      const STAGE_DEFS = [
+        { key: 'director', label: '导演分析', icon: '🎬' },
+        { key: 'script', label: '剧本生成', icon: '📝' },
+        { key: 'character', label: '角色建模', icon: '👤' },
+        { key: 'storyboard', label: '分镜规划', icon: '📋' },
+        { key: 'cinematographer', label: '摄影指导', icon: '📷' },
+        { key: 'wardrobe', label: '服化道', icon: '👔' },
+        { key: 'scene', label: '场景生成', icon: '🏞' },
+        { key: 'sfx', label: '特效设计', icon: '✨' },
+        { key: 'tts', label: '配音合成', icon: '🎙' },
+        { key: 'subtitle', label: '字幕生成', icon: '💬' },
+        { key: 'bgm', label: 'BGM配乐', icon: '🎵' },
+        { key: 'video', label: '视频生成', icon: '🎥' },
+        { key: 'composite', label: '视频合成', icon: '🎬' },
+      ]
+      this.autoGenStages = STAGE_DEFS.map(s => ({ ...s, status: 'pending', error: '' }))
+
+      try {
+        // 调 /pipeline/start，传 project_id，后端自动从已完成阶段续跑
+        const res = await apiReq('POST', '/pipeline/start', {
+          project_id: parseInt(this.projectId),
+          script_text: this.scriptText || '',
+          genre: localStorage.getItem('__DRAMA_GENRE__') || '',
+          title: this.scriptText ? this.scriptText.slice(0, 20) : '短剧',
+        })
+        if (!res.success && !res.pipeline_id) {
+          alert('一键生成启动失败: ' + (res.message || res.error || '请重试'))
+          this.autoGenerating = false
+          return
+        }
+        // 轮询进度
+        this._pollAutoGen()
+      } catch (e) {
+        console.error('auto generate failed:', e)
+        alert('一键生成失败: ' + (e.message || '网络错误'))
+        this.autoGenerating = false
+      }
+    },
+
+    _pollAutoGen() {
+      if (this.autoGenPollTimer) clearInterval(this.autoGenPollTimer)
+      this.autoGenPollTimer = setInterval(async () => {
+        try {
+          const res = await apiReq('GET', '/pipeline/progress/' + this.projectId)
+          if (!res.success || !res.data) return
+          const stages = res.data.stages || []
+          // 更新阶段状态
+          stages.forEach(st => {
+            const found = this.autoGenStages.find(a => a.key === st.stage)
+            if (found) {
+              found.status = st.status === 'paused' ? 'failed' : st.status
+              found.error = st.error || ''
+            }
+          })
+          // 检查最终视频
+          if (res.data.final_video_url) {
+            this.finalVideoUrl = res.data.final_video_url
+          }
+          // 检查是否全部结束
+          const hasRunning = stages.some(s => s.status === 'running' || s.status === 'pending')
+          const hasFailed = stages.some(s => s.status === 'failed' || s.status === 'paused')
+          const allDone = stages.length >= 13 && stages.every(s => s.status === 'completed')
+          if (allDone) {
+            this._finishAutoGen('completed')
+          } else if (!hasRunning && hasFailed) {
+            // 全部跑完但有失败
+            this._finishAutoGen('failed')
+          }
+        } catch (e) {}
+      }, 5000)
+    },
+
+    _finishAutoGen(status) {
+      if (this.autoGenPollTimer) {
+        clearInterval(this.autoGenPollTimer)
+        this.autoGenPollTimer = null
+      }
+      this.autoGenerating = false
+      this.autoGenDone = true
+      this.autoGenStatus = status
+    },
+
+    // ═══ Step 5: 合成发布 ═══
+    async startComposite() {
+      this.isCompositing = true
+      this.compositeProgress = 0
+      try {
+        // 对接正式管道 /pipeline/step，stage=composite
+        const clips = this.shots.filter(s => s.video_url).map(s => ({
+          video: s.video_url,
+          description: s.description,
+          duration_sec: parseInt(s.duration) || 5,
+        }))
+        const res = await apiReq('POST', '/pipeline/step/' + this.projectId, {
+          stage: 'composite',
+          params: { clips: clips }
+        })
+        if (res.success && res.data) {
+          const taskId = res.data.task_id || res.data.composite_id
+          this.startCompositePolling(taskId)
+        } else {
+          alert('合成启动失败: ' + (res.message || '请重试'))
+          this.isCompositing = false
+        }
+      } catch (e) {
+        console.error('composite start failed:', e)
+        alert('合成启动失败: 网络错误')
+        this.isCompositing = false
+      }
+    },
+
+    startCompositePolling(taskId) {
+      this.stopCompositePolling()
+      this.compositePollTimer = setInterval(async () => {
+        try {
+          const res = await apiReq('GET', '/video/composite/progress/' + taskId)
+          if (res.success && res.data) {
+            this.compositeProgress = res.data.progress || res.data.percent || 0
+            if (res.data.finished || res.data.status === 'completed') {
+              this.finalVideoUrl = res.data.video_url || res.data.url || ''
+              this.isCompositing = false
+              this.stopCompositePolling()
+            }
+            if (res.data.status === 'failed') {
+              alert('合成失败: ' + (res.data.error || '请重试'))
+              this.isCompositing = false
+              this.stopCompositePolling()
+            }
+          }
+          if (this.compositeProgress >= 100) {
+            // 保险：刷新一次获取最终 url
+            const r2 = await apiReq('GET', '/video/composite/progress/' + taskId)
+            if (r2.success && r2.data && r2.data.video_url) {
+              this.finalVideoUrl = r2.data.video_url
+            }
+            this.isCompositing = false
+            this.stopCompositePolling()
+          }
+        } catch (e) {
+          console.warn('composite poll failed:', e)
+        }
+      }, 2000)
+    },
+
+    stopCompositePolling() {
+      if (this.compositePollTimer) {
+        clearInterval(this.compositePollTimer)
+        this.compositePollTimer = null
+      }
+    },
+
+    downloadFinalVideo() {
+      if (this.finalVideoUrl) {
+        const a = document.createElement('a')
+        a.href = this.finalVideoUrl
+        a.download = ''
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+      }
+    },
+
+    shareFinalVideo() {
+      if (navigator.share && this.finalVideoUrl) {
+        navigator.share({ title: '智剧AI - 短剧作品', url: this.finalVideoUrl }).catch(() => {})
+      } else if (navigator.clipboard) {
+        navigator.clipboard.writeText(this.finalVideoUrl || window.location.href)
+          .then(() => alert('链接已复制到剪贴板'))
+          .catch(() => {
+            const input = document.createElement('input')
+            input.value = this.finalVideoUrl
+            document.body.appendChild(input)
+            input.select()
+            document.execCommand('copy')
+            document.body.removeChild(input)
+            alert('链接已复制到剪贴板')
+          })
+      }
+    },
+
+    resetAll() {
+      this.stopCompositePolling()
+      this.finalVideoUrl = ''
+      this.compositeProgress = 0
+      this.currentStep = 4
+      this.steps[3].done = false
+      this.steps[4].done = false
+    },
+
+    previewVideo(url) {
+      if (url) this.videoPreviewUrl = url
+    },
+
+    previewImage(url) {
+      if (url) this.previewImgUrl = url
+    },
+
+    // 恢复项目
+    async loadProject(id) {
+      try {
+        const res = await apiReq('GET', '/projects/' + id)
+        const data = res.project || res.data || {}
+        if (res.success && data && data.id) {
+          if (data.script) this.scriptText = data.script
+          if (data.characters) {
+            try {
+              const chars = typeof data.characters === 'string' ? JSON.parse(data.characters) : data.characters
+              if (Array.isArray(chars)) this.characters = chars
+            } catch(e) {}
+          }
+          // 从 pipeline progress 加载分镜和场景图
+          try {
+            const prog = await apiReq('GET', '/pipeline/progress/' + id)
+            if (prog.success && prog.data) {
+              const stages = prog.data.stages || []
+              const sb = stages.find(s => s.stage === 'storyboard')
+              if (sb && sb.status === 'completed' && sb.data && sb.data.shots) {
+                this.shots = sb.data.shots.map(s => ({
+                  id: s.id || s.shot_id || s.shot_num || '',
+                  description: s.description || s.content || '',
+                  dialogue: s.dialogue || '',
+                  scene: s.scene || '',
+                  location: s.location || '',
+                  shot_type: s.shot_type || '',
+                  camera: s.camera || s.camera_movement || '中景',
+                  duration: (s.duration_sec || s.duration || 5) + 's',
+                  scene_image_url: s.scene_image_url || s.image_url || '',
+            director_shot: s.director_shot || '',
+            sound_design: s.sound_design || '',
+            duration_sec: s.duration_sec || 8,
+            camera_angle: s.camera_angle || '',
+            lighting: s.lighting || '',
+                  video_url: s.video_url || '',
+                  videoStatus: s.videoStatus || 'pending',
+                }))
+              }
+              const sc = stages.find(s => s.stage === 'scene')
+              if (sc && sc.status === 'completed' && sc.data && sc.data.image_map) {
+                const im = sc.data.image_map
+                this.shots = this.shots.map((s, i) => {
+                  const img = im[String(i)] || im[i] || ''
+                  return img ? { ...s, scene_image_url: img } : s
+                })
+              }
+              // 加载已生成的视频（后端顶层 shot_videos 按 shot_index 映射）
+              const svs = prog.data.shot_videos || {}
+              const sve = prog.data.shot_video_errors || {}
+              if (Object.keys(svs).length || Object.keys(sve).length) {
+                this.shots = this.shots.map((s, i) => {
+                  const url = svs[String(i)] || svs[i] || ''
+                  const err = sve[String(i)] || sve[i] || ''
+                  if (url) return { ...s, video_url: url, videoStatus: 'completed', videoError: '' }
+                  if (err) return { ...s, videoStatus: 'failed', videoError: err }
+                  return s
+                })
+              }
+              // 合成视频
+              if (prog.data.final_video_url) {
+                this.finalVideoUrl = prog.data.final_video_url
+              }
+            }
+          } catch(e) { console.warn('load progress failed:', e) }
+          // 跳到对应步骤
+          this.steps[0].done = true
+          this.currentStep = 2
+          if (this.characters.length) {
+            this.steps[1].done = true
+            this.currentStep = 3
+          }
+          if (this.shots.length) {
+            this.steps[2].done = true
+            this.currentStep = 4
+          }
+        }
+      } catch (e) {
+        console.warn('load project failed:', e)
+      }
+    },
+
+    // ─── 上传头像 ───
+    triggerUpload(idx) {
+      const refName = 'fileInput' + idx
+      const els = this.$refs[refName]
+      if (els) {
+        const input = Array.isArray(els) ? els[0] : els
+        if (input) input.click()
+      }
+    },
+
+    async handleUpload(e, idx) {
+      const file = e.target.files && e.target.files[0]
+      if (!file) return
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('media_type', 'figures')
+      try {
+        const token = this.token || localStorage.getItem('token') || ''
+        const res = await fetch('/api/v1/media/library/upload', {
+          method: 'POST',
+          headers: token ? { 'Authorization': 'Bearer ' + token } : {},
+          body: fd,
+        })
+        const json = await res.json()
+        if (json.success && json.data && json.data.url) {
+          this.characters[idx].ref_image = json.data.url
+          // 清除旧肖像，让页面显示新上传的图
+          this.characters[idx].portrait_url = ''
+          // 触发响应式更新
+          this.characters = [...this.characters]
+          // 自动保存到DB，确保生成形象时能拿到ref_image
+          this.saveCharacters()
+        } else {
+          alert('上传失败: ' + (json.message || '请重试'))
+        }
+      } catch (e) {
+        console.error('upload failed:', e)
+        alert('上传失败: 网络错误')
+      }
+      // 重置 file input，允许重复上传同一文件
+      e.target.value = ''
+    },
+  },
+}
+</script>
+
+<style scoped>
+/* ═══════════════════════════════════════════
+   专业共创模式 - ProCreatePage
+   ═══════════════════════════════════════════ */
+
+.pro-create-page {
+  display: flex;
+  gap: 28px;
+  min-height: calc(100vh - 56px - 48px);
+  padding: 0;
+}
+
+/* ─── 左侧导航步进条 ─── */
+.sidebar {
+  width: 260px;
+  flex-shrink: 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 28px 20px;
+  display: flex;
+  flex-direction: column;
+  height: fit-content;
+  position: sticky;
+  top: 80px;
+}
+
+.sidebar-header {
+  text-align: center;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 20px;
+}
+
+.sidebar-icon {
+  font-size: 36px;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.sidebar-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.sidebar-subtitle {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.steps-nav {
+  flex: 1;
+}
+
+.step-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  margin-bottom: 4px;
+}
+
+.step-item:hover:not(.step-disabled) {
+  background: rgba(138, 43, 226, 0.06);
+}
+
+.step-item.step-active {
+  background: rgba(138, 43, 226, 0.12);
+  border: 1px solid rgba(138, 43, 226, 0.25);
+}
+
+.step-item.step-done {
+  cursor: pointer;
+}
+
+.step-item.step-disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.step-indicator {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  flex-shrink: 0;
+  background: var(--bg-input);
+  border: 2px solid var(--border);
+  color: var(--text-muted);
+  transition: all 0.25s ease;
+}
+
+.step-active .step-indicator {
+  background: #8A2BE2;
+  border-color: #8A2BE2;
+  color: #fff;
+  box-shadow: 0 0 12px rgba(138, 43, 226, 0.4);
+}
+
+.step-done .step-indicator {
+  background: rgba(0, 230, 118, 0.15);
+  border-color: var(--success);
+}
+
+.step-check {
+  font-size: 16px;
+}
+
+.step-num {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.step-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.step-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.3;
+}
+
+.step-done .step-label {
+  color: var(--success);
+}
+
+.step-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.step-active .step-desc {
+  color: var(--text-secondary);
+}
+
+/* ─── 进度条 ─── */
+.sidebar-progress {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.progress-title {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.progress-pct {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--highlight);
+}
+
+.progress-track {
+  height: 6px;
+  background: var(--bg-input);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #8A2BE2, #00FFFF);
+  border-radius: 3px;
+  transition: width 0.5s ease;
+}
+
+/* ─── 右侧内容区 ─── */
+.content-area {
+  flex: 1;
+  min-width: 0;
+}
+
+.step-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 36px;
+}
+
+.panel-header {
+  margin-bottom: 28px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.panel-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.panel-sub {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+/* ─── 通用按钮 ─── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 22px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition);
+  border: none;
+  white-space: nowrap;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-ai {
+  background: linear-gradient(135deg, #8A2BE2, #00FFFF);
+  color: #fff;
+}
+
+.btn-ai:hover:not(:disabled) {
+  box-shadow: 0 0 20px rgba(0, 255, 255, 0.25);
+  transform: translateY(-1px);
+}
+
+.btn-manual {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+}
+
+.btn-manual:hover:not(:disabled) {
+  border-color: var(--highlight);
+  background: var(--bg-elevated, #2a2a3e);
+}
+
+.btn-save {
+  background: linear-gradient(135deg, #8A2BE2, #00FFFF);
+  color: #fff;
+  font-size: 15px;
+  padding: 12px 28px;
+}
+
+.btn-save:hover:not(:disabled) {
+  box-shadow: 0 0 20px rgba(0, 255, 255, 0.25);
+  transform: translateY(-1px);
+}
+
+/* ─── Spinner ─── */
+.spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+.spinner-sm {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  vertical-align: middle;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ─── 动画 ─── */
+.fade-in {
+  animation: fadeIn 0.35s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ═══ Step 1: 剧本编辑 ═══ */
+.script-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.script-textarea {
+  width: 100%;
+  min-height: 220px;
+  padding: 18px 20px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 15px;
+  font-family: 'Inter', 'Noto Sans SC', -apple-system, sans-serif;
+  line-height: 1.7;
+  resize: vertical;
+  transition: all var(--transition);
+}
+
+.script-textarea:focus {
+  border-color: #8A2BE2;
+  box-shadow: 0 0 0 3px rgba(138, 43, 226, 0.15);
+  outline: none;
+}
+
+.script-textarea::placeholder {
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.script-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.save-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+/* ═══ Step 2: 角色设计 ═══ */
+.script-summary {
+  padding: 12px 16px;
+  background: rgba(0, 255, 255, 0.04);
+  border: 1px solid rgba(0, 255, 255, 0.1);
+  border-radius: var(--radius-sm);
+  margin-bottom: 20px;
+}
+
+.summary-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--highlight);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.summary-text {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.extract-row {
+  margin-bottom: 20px;
+}
+
+.char-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.char-card {
+  background: #252536;
+  border: 1px solid #333355;
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: all var(--transition);
+}
+
+.char-card:hover {
+  border-color: rgba(138, 43, 226, 0.3);
+}
+
+.char-avatar-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.char-portrait {
+  width: 100px;
+  height: 100px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+}
+
+.char-portrait img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.placeholder-portrait {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.btn-portrait {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 14px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.btn-portrait:hover:not(:disabled) {
+  border-color: var(--highlight);
+  color: var(--highlight);
+}
+
+.btn-upload {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 14px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.btn-upload:hover {
+  border-color: var(--success, #00e676);
+  color: var(--success, #00e676);
+}
+
+.char-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.char-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.char-field label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.char-field input,
+.char-field select,
+.char-field textarea {
+  width: 100%;
+  padding: 7px 10px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+  transition: all var(--transition);
+}
+
+.char-field input:focus,
+.char-field select:focus,
+.char-field textarea:focus {
+  border-color: #8A2BE2;
+  box-shadow: 0 0 0 2px rgba(138, 43, 226, 0.12);
+  outline: none;
+}
+
+.char-field textarea {
+  resize: vertical;
+  min-height: 40px;
+}
+
+.char-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.btn-char-del {
+  padding: 5px 12px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--danger);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.btn-char-del:hover {
+  background: rgba(255, 82, 82, 0.1);
+  border-color: rgba(255, 82, 82, 0.2);
+}
+
+.char-add-card {
+  border: 2px dashed #333355;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  min-height: 120px;
+  color: var(--text-muted);
+  font-size: 14px;
+  transition: all var(--transition);
+}
+
+.char-add-card:hover {
+  border-color: var(--highlight);
+  color: var(--highlight);
+  background: rgba(0, 255, 255, 0.03);
+}
+
+.add-icon {
+  font-size: 32px;
+  font-weight: 300;
+  margin-bottom: 4px;
+}
+
+.step-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+/* ═══ Step 3: 分镜规划 ═══ */
+.shot-toolbar {
+  margin-bottom: 20px;
+}
+
+.shot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.shot-card {
+  background: #252536;
+  border: 1px solid #333355;
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: grab;
+  transition: all var(--transition);
+  position: relative;
+}
+
+.shot-card:hover {
+  border-color: rgba(138, 43, 226, 0.3);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+.shot-card:active {
+  cursor: grabbing;
+}
+
+.shot-order {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 26px;
+  height: 26px;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  z-index: 2;
+}
+
+.shot-thumb {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: var(--bg-input);
+}
+
+.shot-img-wrapper {
+  width: 100%;
+  height: 100%;
+}
+
+.shot-img-wrapper img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.shot-img-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  color: var(--text-muted);
+}
+
+.shot-info {
+  padding: 12px 14px;
+}
+
+.shot-scene-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-color, #667eea);
+  margin-bottom: 3px;
+}
+.shot-desc {  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+.shot-dialogue {
+  font-size: 12px;
+  color: #d4a05a;
+  font-style: italic;
+  line-height: 1.4;
+  margin-bottom: 6px;
+  padding: 3px 6px;
+  background: rgba(212, 160, 90, 0.1);
+  border-radius: 4px;
+}
+
+.shot-meta {
+  display: flex;
+  gap: 6px;
+}
+
+.meta-tag {
+  padding: 2px 8px;
+  font-size: 10px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text-muted);
+}
+
+.shot-actions {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+}
+
+.btn-scene-gen {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.btn-scene-gen:hover:not(:disabled) {
+  background: rgba(138, 43, 226, 0.8);
+}
+
+/* ═══ Step 4: 视频生成 ═══ */
+.video-shot-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.video-shot-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: #252536;
+  border: 1px solid #333355;
+  border-radius: 12px;
+  transition: all var(--transition);
+  position: relative;
+}
+
+.video-shot-item.vs-completed {
+  border-color: rgba(0, 230, 118, 0.2);
+  background: rgba(0, 230, 118, 0.03);
+}
+
+.video-shot-item.vs-failed {
+  border-color: rgba(255, 82, 82, 0.2);
+  background: rgba(255, 82, 82, 0.03);
+}
+
+.video-shot-item.vs-generating {
+  border-color: rgba(138, 43, 226, 0.25);
+  background: rgba(138, 43, 226, 0.05);
+}
+
+.vs-order {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--bg-input);
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.vs-thumb {
+  width: 60px;
+  height: 40px;
+  border-radius: 6px;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: var(--bg-input);
+}
+
+.vs-img-wrapper {
+  width: 100%;
+  height: 100%;
+}
+
+.vs-img-wrapper img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.vs-img-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+}
+
+.vs-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.vs-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vs-status {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  font-size: 12px;
+  min-width: 60px;
+}
+
+.status-icon {
+  font-size: 14px;
+}
+
+.status-label {
+  color: var(--text-secondary);
+}
+
+.vs-completed .status-label {
+  color: var(--success);
+}
+
+.vs-failed .status-label {
+  color: var(--danger);
+}
+
+.vs-action {
+  flex-shrink: 0;
+}
+
+.btn-video-gen {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 14px;
+  background: linear-gradient(135deg, #8A2BE2, #00FFFF);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.btn-video-gen:hover:not(:disabled) {
+  box-shadow: 0 0 12px rgba(0, 255, 255, 0.2);
+}
+
+.btn-video-gen:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.vs-preview {
+  position: absolute;
+  top: 8px;
+  right: 100px;
+  width: 80px;
+  height: 56px;
+  border-radius: 6px;
+  overflow: hidden;
+  cursor: pointer;
+  background: #000;
+}
+
+.vs-preview video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.play-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 28px;
+  height: 28px;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  color: #fff;
+}
+
+/* ═══ Step 5: 合成发布 ═══ */
+.final-shot-list {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 12px;
+  margin-bottom: 24px;
+}
+
+.final-shot-item {
+  flex-shrink: 0;
+  width: 120px;
+  background: #252536;
+  border: 1px solid #333355;
+  border-radius: 10px;
+  overflow: hidden;
+  transition: all var(--transition);
+}
+
+.final-shot-item.has-video {
+  border-color: rgba(0, 230, 118, 0.2);
+}
+
+.fs-order {
+  text-align: center;
+  padding: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  background: var(--bg-input);
+}
+
+.fs-thumb {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  position: relative;
+  cursor: pointer;
+  overflow: hidden;
+  background: var(--bg-input);
+}
+
+.fs-thumb video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.fs-thumb-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  color: var(--text-muted);
+}
+
+.fs-info {
+  padding: 6px 8px;
+}
+
+.fs-desc {
+  font-size: 10px;
+  color: var(--text-secondary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ─── 合成区 ─── */
+.composite-section {
+  text-align: center;
+  padding: 20px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  margin-bottom: 20px;
+}
+
+.btn-composite {
+  font-size: 16px;
+  padding: 14px 36px;
+}
+
+.composite-progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.cp-bar {
+  flex: 1;
+  height: 8px;
+  background: var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.cp-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #8A2BE2, #00FFFF);
+  border-radius: 4px;
+  transition: width 0.4s ease;
+}
+
+.cp-pct {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--highlight);
+  flex-shrink: 0;
+  min-width: 40px;
+  text-align: right;
+}
+
+/* ─── 最终视频 ─── */
+.final-video-section {
+  text-align: center;
+}
+
+.final-video-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--highlight);
+  margin-bottom: 16px;
+}
+
+.final-video-wrapper {
+  width: 100%;
+  max-width: 400px;
+  aspect-ratio: 9 / 16;
+  max-height: 520px;
+  margin: 0 auto 20px;
+  background: #000;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 0 40px rgba(138, 43, 226, 0.2);
+}
+
+.final-video-player {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.final-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* ─── 视频预览弹窗 ─── */
+.modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+.modal-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  width: 520px;
+  max-width: 90vw;
+  max-height: 85vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.video-modal {
+  width: 480px;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-header h3 {
+  font-size: 16px;
+  color: var(--text-primary);
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px;
+}
+
+.modal-close:hover {
+  color: var(--text-primary);
+}
+
+.modal-body {
+  padding: 16px;
+}
+
+.preview-video {
+  width: 100%;
+  aspect-ratio: 9 / 16;
+  max-height: 60vh;
+  border-radius: 8px;
+  background: #000;
+}
+
+/* ─── 响应式 ─── */
+@media (max-width: 768px) {
+  .pro-create-page {
+    flex-direction: column;
+    gap: 16px;
+  }
+  .sidebar {
+    width: 100%;
+    position: static;
+  }
+  .char-grid {
+    grid-template-columns: 1fr;
+  }
+  .shot-grid {
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  }
+  .step-panel {
+    padding: 20px;
+  }
+}
+
+/* ═══ 一键生成 ═══ */
+.sidebar-autogen {
+  padding: 12px 16px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+.btn-autogen {
+  width: 100%;
+  padding: 12px;
+  border: none;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.btn-autogen:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(102,126,234,0.4);
+}
+.btn-autogen:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.autogen-hint {
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: rgba(255,255,255,0.4);
+  text-align: center;
+}
+
+/* 一键生成进度面板 */
+.autogen-panel {
+  background: #fff;
+  border-radius: 14px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+}
+.ag-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.ag-header h3 { margin: 0; font-size: 18px; }
+.ag-status { font-size: 14px; font-weight: 600; }
+.ag-status.completed { color: #52c41a; }
+.ag-status.failed { color: #ff4d4f; }
+.ag-status.running { color: #1890ff; }
+.ag-stages {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+}
+.ag-stage-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #f5f5f5;
+  font-size: 13px;
+}
+.ag-stage-item.ag-completed { background: #f6ffed; }
+.ag-stage-item.ag-running, .ag-stage-item.ag-retrying { background: #e6f7ff; }
+.ag-stage-item.ag-failed { background: #fff2f0; }
+.ag-stage-label { font-weight: 500; }
+.ag-stage-error { display: block; font-size: 11px; color: #ff4d4f; margin-top: 2px; }
+.ag-stage-retry { display: block; font-size: 11px; color: #faad14; }
+.ag-result {
+  margin-top: 16px;
+  text-align: center;
+}
+.ag-result p { font-size: 16px; font-weight: 600; margin: 0 0 12px; }
+.ag-video { max-width: 100%; border-radius: 10px; margin-bottom: 12px; }
+.btn-download {
+  display: inline-block;
+  padding: 10px 24px;
+  background: #52c41a;
+  color: #fff;
+  text-decoration: none;
+  border-radius: 8px;
+  font-weight: 600;
+}
+
+
+/* ═══ 逐镜精修：单镜头导航 ═══ */
+.single-shot-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.btn-nav {
+  padding: 6px 16px;
+  border: 1px solid #d9d9d9;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+.btn-nav:hover:not(:disabled) { border-color: #1890ff; color: #1890ff; }
+.btn-nav:disabled { opacity: 0.4; cursor: not-allowed; }
+.nav-label {
+  font-weight: 600;
+  font-size: 15px;
+  color: #333;
+  min-width: 100px;
+  text-align: center;
+}
+
+/* ═══ 单镜头主区域 ═══ */
+.single-shot-main {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 16px;
+}
+.single-shot-preview {
+  flex: 1;
+  min-height: 300px;
+  background: #f5f5f5;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.preview-video {
+  max-width: 100%;
+  max-height: 480px;
+  border-radius: 8px;
+}
+.preview-image {
+  max-width: 100%;
+  max-height: 480px;
+  border-radius: 8px;
+  object-fit: contain;
+}
+.preview-generating {
+  text-align: center;
+  color: #999;
+}
+.preview-empty {
+  text-align: center;
+  color: #bbb;
+}
+.preview-empty span { font-size: 48px; display: block; margin-bottom: 8px; }
+.spinner-lg {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #e8e8e8;
+  border-top-color: #1890ff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 20px auto;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* 编辑区 */
+.single-shot-edit {
+  width: 340px;
+  flex-shrink: 0;
+}
+.edit-textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #d9d9d9;
+  border-radius: 6px;
+  font-size: 13px;
+  resize: vertical;
+  margin-bottom: 8px;
+  box-sizing: border-box;
+}
+.edit-textarea:focus {
+  outline: none;
+  border-color: #1890ff;
+  box-shadow: 0 0 0 2px rgba(24,144,255,0.1);
+}
+.edit-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.meta-badge {
+  background: #f0f5ff;
+  border: 1px solid #d6e4ff;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 12px;
+  color: #1d39c4;
+}
+.edit-tags {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.edit-select {
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid #d9d9d9;
+  border-radius: 6px;
+  font-size: 12px;
+  background: #fff;
+}
+.edit-select:focus {
+  outline: none;
+  border-color: #1890ff;
+}
+
+/* ═══ 操作按钮区 ═══ */
+.single-shot-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+.btn-lg {
+  padding: 10px 24px;
+  font-size: 15px;
+  border-radius: 8px;
+}
+
+/* ═══ 进度点条 ═══ */
+.shot-progress-bar {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  padding: 12px;
+  overflow-x: auto;
+}
+.shot-progress-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  cursor: pointer;
+  background: #e0e0e0;
+  color: #999;
+  transition: all 0.3s;
+  flex-shrink: 0;
+}
+.dot-done { background: #52c41a; color: #fff; }
+.dot-current { background: #1890ff; color: #fff; transform: scale(1.2); box-shadow: 0 0 6px rgba(24,144,255,0.5); }
+.dot-failed { background: #ff4d4f; color: #fff; }
+.dot-generating { background: #fa8c16; color: #fff; animation: dotPulse 1s infinite; }
+@keyframes dotPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.2); }
+}
+
+@media (max-width: 768px) {
+  .single-shot-main { flex-direction: column; }
+  .single-shot-edit { width: 100%; }
+}
+
+
+
+/* Step 3 分镜内联编辑 */
+.shot-edit-wrap {
+  margin-bottom: 4px;
+}
+.shot-edit-wrap label {
+  display: block;
+  font-size: 11px;
+  color: rgba(255,255,255,0.4);
+  margin-bottom: 1px;
+}
+.shot-textarea {
+  width: 100%;
+  padding: 4px 6px;
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 4px;
+  font-size: 12px;
+  resize: vertical;
+  box-sizing: border-box;
+  font-family: inherit;
+  color: #e0e0e0;
+  background: rgba(255,255,255,0.05);
+  transition: border-color 0.2s, background 0.2s;
+}
+.shot-textarea::placeholder { color: rgba(255,255,255,0.3); }
+.shot-textarea:focus {
+  outline: none;
+  border-color: #8A2BE2;
+  background: rgba(255,255,255,0.1);
+  box-shadow: 0 0 0 2px rgba(138,43,226,0.15);
+}
+.shot-textarea:hover {
+  border-color: rgba(255,255,255,0.3);
+  background: rgba(255,255,255,0.08);
+}
+.btn-save-shot {
+  margin-top: 4px;
+  padding: 2px 10px;
+  font-size: 12px;
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 4px;
+  background: rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.7);
+  cursor: pointer;
+  transition: all 0.2s;
+  float: right;
+}
+.btn-save-shot:hover { border-color: #52c41a; color: #52c41a; background: #f6ffed; }
+.btn-save-shot:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.shot-info { position: relative; }
+.spinner-xs {
+  display: inline-block;
+  width: 12px; height: 12px;
+  border: 2px solid #e8e8e8;
+  border-top-color: #52c41a;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+.media-picker-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; display: flex; align-items: center; justify-content: center; }
+.media-picker-modal { background: #1e1e2e; border-radius: 12px; width: 680px; max-width: 90vw; max-height: 80vh; display: flex; flex-direction: column; }
+.media-picker-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+.media-picker-header h3 { margin: 0; color: #fff; font-size: 16px; }
+.media-picker-close { background: none; border: none; font-size: 18px; color: #999; cursor: pointer; }
+.media-picker-tabs { display: flex; padding: 0 20px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+.tab-btn { padding: 10px 20px; border: none; background: none; color: #999; cursor: pointer; border-bottom: 2px solid transparent; font-size: 14px; }
+.tab-btn.active { color: #8A2BE2; border-bottom-color: #8A2BE2; }
+.media-picker-content { flex: 1; overflow-y: auto; padding: 16px; }
+.media-picker-empty { text-align: center; color: #666; padding: 40px; }
+.media-picker-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.media-picker-item { position: relative; border-radius: 8px; overflow: hidden; cursor: pointer; border: 2px solid transparent; aspect-ratio: 1; background: #2a2a3e; }
+.media-picker-item.selected { border-color: #8A2BE2; }
+.media-picker-item img { width: 100%; height: 100%; object-fit: cover; }
+.media-item-check { position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; background: #8A2BE2; color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; }
+.media-picker-loading { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #999; padding: 40px; }
+.media-picker-footer { display: flex; justify-content: flex-end; gap: 10px; padding: 12px 20px; border-top: 1px solid rgba(255,255,255,0.1); }
+.btn-library { padding: 6px 12px; border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.7); cursor: pointer; font-size: 12px; white-space: nowrap; }
+.btn-library:hover { border-color: #8A2BE2; color: #8A2BE2; }
+.btn-cancel { padding: 8px 20px; border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; background: transparent; color: #ccc; cursor: pointer; font-size: 14px; }
+.btn-primary { padding: 8px 20px; border: none; border-radius: 6px; background: #8A2BE2; color: #fff; cursor: pointer; font-size: 14px; }
+
+.edit-tags-row { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+.edit-tag { font-size: 11px; padding: 2px 6px; border-radius: 3px; background: rgba(138,43,226,0.15); color: #b388ff; }
+.emotion-badge { background: rgba(255,152,0,0.15); color: #ffb74d; }
+.director-info { margin-top: 6px; }
+.director-shot-box { font-size: 11px; padding: 6px 8px; background: rgba(255,255,255,0.04); border-left: 2px solid #8A2BE2; border-radius: 3px; color: rgba(255,255,255,0.6); line-height: 1.5; margin-top: 2px; max-height: 100px; overflow-y: auto; }
+.sound-design-box { font-size: 11px; padding: 6px 8px; background: rgba(255,255,255,0.04); border-left: 2px solid #00BCD4; border-radius: 3px; color: rgba(255,255,255,0.6); line-height: 1.5; margin-top: 2px; }
+
+</style>

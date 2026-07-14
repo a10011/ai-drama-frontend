@@ -1,0 +1,37 @@
+<template>
+  <div class="history-page">
+    <div class="card">
+      <h2>我的作品</h2>
+      <div v-if="!list.length" class="empty">暂无作品</div>
+      <div v-for="(p,i) in list" :key="i" class="project-item" @click="$router.push('/result/'+p.id)">
+        <div class="project-title">{{ p.title || '未命名' }}</div>
+        <div class="project-meta">{{ p.status }} · {{ formatTime(p.created_at) }}</div>
+      </div>
+    </div>
+  </div>
+</template>
+<script>
+export default {
+  data(){return{list:[]}},
+  methods:{
+    async load(){
+      try{
+        const r=await(await fetch('/api/v1/projects',{headers:{'Authorization':'***'+localStorage.getItem('token')}})).json()
+        if(r.success)this.list=(r.data?.projects||r.data||[]).slice(0,50)
+      }catch(e){}
+    },
+    formatTime(t){return t?new Date(t*1000).toLocaleString():''}
+  },
+  mounted(){this.load()}
+}
+</script>
+<style scoped>
+.history-page{max-width:700px;margin:0 auto}
+.card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:24px}
+.card h2{font-size:18px;margin-bottom:16px;color:var(--text-primary)}
+.empty{padding:40px;text-align:center;color:var(--text-muted)}
+.project-item{padding:12px 16px;border-radius:var(--radius-sm);cursor:pointer;margin-bottom:8px;border:1px solid var(--border);background:var(--bg-input)}
+.project-item:hover{background:var(--accent-glow);border-color:var(--highlight)}
+.project-title{font-size:14px;font-weight:500;margin-bottom:4px;color:var(--text-primary)}
+.project-meta{font-size:12px;color:var(--text-muted)}
+</style>

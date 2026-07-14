@@ -1,0 +1,246 @@
+/* ============================================================
+   短剧创作工作台 · 深色剪辑软件风格 (v2.0)
+   对标 Premiere / 剪映专业版操作台
+   ============================================================ */
+
+:root {
+  /* 基础色板 */
+  --bg-deep: #090C13;
+  --bg-panel: #131925;
+  --bg-surface: #1A2230;
+  --bg-hover: #1F2838;
+  --bg-active: #243045;
+
+  --border-main: #222B3C;
+  --border-light: #2A3550;
+  --border-focus: #165DFF;
+
+  /* 主功能色 */
+  --blue: #165DFF;
+  --blue-hover: #3A7AFF;
+  --blue-glow: rgba(22, 93, 255, 0.25);
+
+  /* 辅助色 */
+  --orange: #FF7D00;
+  --orange-hover: #FF9A33;
+  --orange-glow: rgba(255, 125, 0, 0.2);
+
+  --green: #22C55E;
+  --red: #F53F3F;
+  --yellow: #FFAA00;
+
+  /* 文字 */
+  --text-primary: #E8ECF0;
+  --text-secondary: #8896A6;
+  --text-muted: #536170;
+  --text-inverse: #090C13;
+
+  /* 尺寸 */
+  --radius-sm: 4px;
+  --radius: 6px;
+  /* === App.vue compatibility aliases === */
+  --bg-canvas: var(--bg-deep);
+  --bg-toolbar: var(--bg-panel);
+  /* App.vue defines its own --border, --accent, --accent-glow, --text, --danger, --success */
+
+  --radius-lg: 8px;
+
+  --topbar-h: 44px;
+  --sidebar-w: 220px;
+  --params-w: 280px;
+  --statusbar-h: 28px;
+
+  /* 阴影 */
+  --shadow-panel: 0 1px 3px rgba(0,0,0,0.4);
+  --shadow-float: 0 4px 16px rgba(0,0,0,0.5);
+
+  /* 过渡 */
+  --ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+/* --- Reset & Base --- */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body, #app {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+a { color: var(--blue); text-decoration: none; }
+a:hover { color: var(--blue-hover); }
+
+/* --- Scrollbar --- */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* --- Buttons --- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s var(--ease);
+  white-space: nowrap;
+  line-height: 1.4;
+}
+.btn:active { transform: scale(0.97); }
+.btn:disabled, .btn.locked {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.btn-primary {
+  background: var(--blue);
+  color: #fff;
+}
+.btn-primary:hover { background: var(--blue-hover); box-shadow: 0 0 8px var(--blue-glow); }
+
+.btn-orange {
+  background: var(--orange);
+  color: #fff;
+}
+.btn-orange:hover { background: var(--orange-hover); box-shadow: 0 0 8px var(--orange-glow); }
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-main);
+}
+.btn-ghost:hover { background: var(--bg-hover); color: var(--text-primary); border-color: var(--border-light); }
+
+.btn-sm { padding: 4px 10px; font-size: 11px; }
+.btn-lg { padding: 8px 20px; font-size: 14px; }
+
+/* --- Inputs --- */
+.input {
+  width: 100%;
+  padding: 7px 10px;
+  background: var(--bg-deep);
+  border: 1px solid var(--border-main);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.15s var(--ease);
+}
+.input:focus { border-color: var(--blue); box-shadow: 0 0 0 1px var(--blue-glow); }
+.input::placeholder { color: var(--text-muted); }
+
+.textarea {
+  width: 100%;
+  padding: 10px;
+  background: var(--bg-deep);
+  border: 1px solid var(--border-main);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  font-size: 12px;
+  outline: none;
+  resize: vertical;
+  min-height: 60px;
+  line-height: 1.6;
+  font-family: inherit;
+}
+.textarea:focus { border-color: var(--blue); box-shadow: 0 0 0 1px var(--blue-glow); }
+.textarea::placeholder { color: var(--text-muted); }
+
+/* --- Select --- */
+.select {
+  width: 100%;
+  padding: 7px 10px;
+  background: var(--bg-deep);
+  border: 1px solid var(--border-main);
+  border-radius: var(--radius);
+  color: var(--text-primary);
+  font-size: 12px;
+  outline: none;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%238896A6' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 28px;
+}
+.select:focus { border-color: var(--blue); box-shadow: 0 0 0 1px var(--blue-glow); }
+.select option { background: var(--bg-panel); color: var(--text-primary); }
+
+/* --- Tags / Labels --- */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 500;
+}
+.tag-blue { background: rgba(22,93,255,0.15); color: var(--blue); }
+.tag-orange { background: rgba(255,125,0,0.15); color: var(--orange); }
+.tag-green { background: rgba(34,197,94,0.15); color: var(--green); }
+.tag-red { background: rgba(245,63,63,0.15); color: var(--red); }
+.tag-muted { background: var(--bg-hover); color: var(--text-muted); }
+
+/* --- Lock icon overlay --- */
+.lock-overlay {
+  position: relative;
+}
+.lock-overlay::after {
+  content: '🔒';
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 18px;
+  opacity: 0.0;
+  transition: opacity 0.2s;
+  pointer-events: none;
+}
+
+/* --- Section Headers --- */
+.section-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+  padding: 0 2px;
+}
+
+/* --- Divider --- */
+.divider {
+  height: 1px;
+  background: var(--border-main);
+  margin: 12px 0;
+}
+
+/* --- Tooltip (software-style) --- */
+.tooltip-box {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  box-shadow: var(--shadow-float);
+  max-width: 220px;
+  line-height: 1.5;
+}
+.tooltip-box .lock-icon { font-size: 14px; margin-right: 4px; }

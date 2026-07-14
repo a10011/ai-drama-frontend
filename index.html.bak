@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AI短剧</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<style>
+.hermes-cs-btn {
+  position: fixed; right: 24px; top: 50%; transform: translateY(-50%);
+  z-index: 99999; width: 56px; height: 56px; border-radius: 50%;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6); color: #fff;
+  border: none; cursor: grab; display: flex; align-items: center;
+  justify-content: center; font-size: 24px;
+  box-shadow: 0 4px 20px rgba(99,102,241,0.4);
+  transition: box-shadow 0.3s; user-select: none; touch-action: none;
+}
+.hermes-cs-btn:active { cursor: grabbing; }
+.hermes-cs-btn:hover { box-shadow: 0 6px 28px rgba(99,102,241,0.6); }
+.hermes-cs-btn .pulse {
+  position: absolute; width: 100%; height: 100%; border-radius: 50%;
+  border: 2px solid rgba(99,102,241,0.3); animation: cs-pulse 2s infinite;
+}
+@keyframes cs-pulse {
+  0% { transform: scale(1); opacity: 0.6; }
+  100% { transform: scale(1.5); opacity: 0; }
+}
+.hermes-cs-dialog {
+  position: fixed; right: 96px; top: 50%; transform: translateY(-50%);
+  z-index: 99998; width: 380px; height: 560px; max-height: 80vh;
+  background: #1a1a2e; border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 16px; box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+  display: none; flex-direction: column; overflow: hidden;
+}
+.hermes-cs-dialog.open { display: flex; }
+.hermes-cs-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 18px; border-bottom: 1px solid rgba(255,255,255,0.06);
+  background: rgba(255,255,255,0.03);
+}
+.hermes-cs-header-left { display: flex; align-items: center; gap: 10px; }
+.hermes-cs-avatar {
+  width: 36px; height: 36px; border-radius: 50%;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  display: flex; align-items: center; justify-content: center; font-size: 16px;
+}
+.hermes-cs-header-text h3 { font-size: 14px; font-weight: 600; color: #f1f5f9; margin: 0; }
+.hermes-cs-header-text p { font-size: 11px; color: rgba(255,255,255,0.4); margin: 2px 0 0; }
+.hermes-cs-close {
+  width: 32px; height: 32px; border-radius: 50%; border: none; background: transparent;
+  color: rgba(255,255,255,0.4); cursor: pointer; font-size: 16px;
+  display: flex; align-items: center; justify-content: center; transition: all 0.15s;
+}
+.hermes-cs-close:hover { background: rgba(255,255,255,0.06); color: #fff; }
+.hermes-cs-body { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.hermes-cs-msg { max-width: 85%; padding: 10px 14px; border-radius: 12px; font-size: 13px; line-height: 1.6; word-break: break-word; }
+.hermes-cs-msg.bot { background: rgba(255,255,255,0.06); color: #e5e7eb; align-self: flex-start; border-bottom-left-radius: 4px; }
+.hermes-cs-msg.user { background: linear-gradient(135deg, #6366f1, #7c3aed); color: #fff; align-self: flex-end; border-bottom-right-radius: 4px; }
+.hermes-cs-msg .typing-dots { display: inline-flex; gap: 4px; padding: 4px 0; }
+.hermes-cs-msg .typing-dots span { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,0.4); animation: cs-bounce 1.2s infinite; }
+.hermes-cs-msg .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+.hermes-cs-msg .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes cs-bounce { 0%,80%,100% { transform: translateY(0); } 40% { transform: translateY(-6px); } }
+.hermes-cs-suggestions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.hermes-cs-suggestions span { padding: 4px 12px; border-radius: 14px; font-size: 11px; background: rgba(99,102,241,0.12); color: #818cf8; border: 1px solid rgba(99,102,241,0.2); cursor: pointer; transition: all 0.15s; }
+.hermes-cs-suggestions span:hover { background: rgba(99,102,241,0.2); }
+.hermes-cs-footer { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-top: 1px solid rgba(255,255,255,0.06); background: rgba(255,255,255,0.02); }
+.hermes-cs-input { flex: 1; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 8px 12px; color: #f1f5f9; font-size: 13px; outline: none; transition: all 0.15s; }
+.hermes-cs-input:focus { border-color: rgba(99,102,241,0.4); }
+.hermes-cs-input::placeholder { color: rgba(255,255,255,0.25); }
+.hermes-cs-send { width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, #6366f1, #8b5cf6); color: #fff; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; transition: all 0.15s; flex-shrink: 0; }
+.hermes-cs-send:hover { transform: scale(1.05); box-shadow: 0 2px 10px rgba(99,102,241,0.4); }
+.hermes-cs-send:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+.hermes-cs-badge { position: absolute; top: -4px; right: -4px; width: 20px; height: 20px; border-radius: 50%; background: #ef4444; color: #fff; font-size: 10px; font-weight: 600; display: none; align-items: center; justify-content: center; }
+.hermes-cs-badge.show { display: flex; }
+@media (max-width: 480px) {
+  .hermes-cs-btn { right: 16px; width: 48px; height: 48px; font-size: 20px; }
+  .hermes-cs-dialog { right: 16px; left: 16px; width: auto; top: auto; bottom: 80px; transform: none; max-height: 60vh; }
+}
+</style>
+  <script type="module" src="/src/main.js"></script>
+</head>
+<body>
+<div id="app"></div>
+
+<div class="hermes-cs-btn" id="hermesCsBtn">
+  <div class="pulse"></div>
+  <i class="fas fa-robot"></i>
+  <div class="hermes-cs-badge" id="hermesCsBadge">1</div>
+</div>
+
+<div class="hermes-cs-dialog" id="hermesCsDialog">
+  <div class="hermes-cs-header">
+    <div class="hermes-cs-header-left">
+      <div class="hermes-cs-avatar"><i class="fas fa-robot"></i></div>
+      <div class="hermes-cs-header-text"><h3>AI 客服助手</h3><p>在线 · 随时为您服务</p></div>
+    </div>
+    <button class="hermes-cs-close" id="hermesCsClose"><i class="fas fa-times"></i></button>
+  </div>
+  <div class="hermes-cs-body" id="hermesCsBody">
+    <div class="hermes-cs-msg bot">您好！我是 AI 客服助手 👋<br><br>我可以帮您：<br>• 解答平台使用问题<br>• 创作剧本/角色<br>• 生成短视频<br>• 查询积分和会员信息<br>• 转接专业智能体处理<br><br>请告诉我您需要什么帮助？</div>
+    <div class="hermes-cs-suggestions" id="hermesCsSuggestions">
+      <span onclick="sendSuggestion('我想创作一个短剧剧本')">🎬 创作剧本</span>
+      <span onclick="sendSuggestion('怎么生成视频？')">🎥 生成视频</span>
+      <span onclick="sendSuggestion('我的积分有多少？')">⭐ 查询积分</span>
+      <span onclick="sendSuggestion('怎么充值会员？')">💎 会员充值</span>
+    </div>
+  </div>
+  <div class="hermes-cs-footer">
+    <input class="hermes-cs-input" id="hermesCsInput" placeholder="输入您的问题..." onkeydown="if(event.key==='Enter')sendMsg()">
+    <button class="hermes-cs-send" id="hermesCsSend" onclick="sendMsg()"><i class="fas fa-paper-plane"></i></button>
+  </div>
+</div>
+
+<script>
+const btn = document.getElementById('hermesCsBtn');
+let csBtnX = window.innerWidth - 80, csBtnY = window.innerHeight / 2;
+let isDragging = false, dragOX = 0, dragOY = 0;
+
+try {
+  const s = localStorage.getItem('hermes_cs_pos');
+  if (s) { const p = JSON.parse(s); csBtnX=p.x; csBtnY=p.y; btn.style.left=csBtnX+'px'; btn.style.right='auto'; btn.style.top=csBtnY+'px'; }
+} catch(e){}
+
+btn.addEventListener('mousedown',e=>{isDragging=true;const r=btn.getBoundingClientRect();dragOX=e.clientX-r.left;dragOY=e.clientY-r.top;btn.style.cursor='grabbing';btn.style.transition='none'});
+btn.addEventListener('touchstart',e=>{const t=e.touches[0];isDragging=true;const r=btn.getBoundingClientRect();dragOX=t.clientX-r.left;dragOY=t.clientY-r.top;btn.style.cursor='grabbing';btn.style.transition='none'},{passive:false});
+document.addEventListener('mousemove',e=>{if(!isDragging)return;csBtnX=e.clientX-dragOX;csBtnY=e.clientY-dragOY;btn.style.left=csBtnX+'px';btn.style.right='auto';btn.style.top=csBtnY+'px'});
+document.addEventListener('touchmove',e=>{if(!isDragging)return;const t=e.touches[0];csBtnX=t.clientX-dragOX;csBtnY=t.clientY-dragOY;btn.style.left=csBtnX+'px';btn.style.right='auto';btn.style.top=csBtnY+'px'},{passive:false});
+document.addEventListener('mouseup',()=>{if(!isDragging)return;isDragging=false;btn.style.cursor='grab';btn.style.transition='';localStorage.setItem('hermes_cs_pos',JSON.stringify({x:csBtnX,y:csBtnY}))});
+document.addEventListener('touchend',()=>{if(!isDragging)return;isDragging=false;btn.style.cursor='grab';btn.style.transition='';localStorage.setItem('hermes_cs_pos',JSON.stringify({x:csBtnX,y:csBtnY}))});
+
+let csOpen=false, csWaiting=false, csSession=[];
+let csp={x:0,y:0};
+btn.addEventListener('mousedown',e=>{csp.x=e.clientX;csp.y=e.clientY});
+btn.addEventListener('mouseup',e=>{if(Math.abs(e.clientX-csp.x)<5&&Math.abs(e.clientY-csp.y)<5)toggleCS()});
+
+function toggleCS(){
+  const d=document.getElementById('hermesCsDialog'); csOpen=!csOpen; d.classList.toggle('open');
+  if(csOpen){
+    document.getElementById('hermesCsBadge').classList.remove('show');
+    document.getElementById('hermesCsInput').focus();
+    const r=btn.getBoundingClientRect();
+    d.style.left=(r.left-400)+'px'; d.style.right='auto';
+    d.style.top=(r.top+r.height/2-280)+'px';
+  }
+}
+document.getElementById('hermesCsClose').onclick=()=>toggleCS();
+
+function addMsg(t,r){const b=document.getElementById('hermesCsBody'),d=document.createElement('div');d.className='hermes-cs-msg '+r;d.textContent=t;b.appendChild(d);b.scrollTop=b.scrollHeight}
+function addTyping(){const b=document.getElementById('hermesCsBody'),d=document.createElement('div');d.className='hermes-cs-msg bot';d.id='csTyping';d.innerHTML='<div class="typing-dots"><span></span><span></span><span></span></div>';b.appendChild(d);b.scrollTop=b.scrollHeight}
+function removeTyping(){const t=document.getElementById('csTyping');if(t)t.remove()}
+function sendSuggestion(t){document.getElementById('hermesCsInput').value=t;sendMsg()}
+
+async function sendMsg(){
+  const inp=document.getElementById('hermesCsInput'),text=inp.value.trim();
+  if(!text||csWaiting)return; inp.value=''; csWaiting=true;
+  document.getElementById('hermesCsSend').disabled=true;
+  addMsg(text,'user'); addTyping(); csSession.push({role:'user',content:text});
+  try {
+    // 用GET方式避免nginx拦截POST
+    const resp=await fetch('/api/memory/cs/chat?msg='+encodeURIComponent(text));
+    const data=await resp.json();
+    removeTyping();
+    const reply=data.reply||data.message||'抱歉，暂时无法回答';
+    addMsg(reply,'bot'); csSession.push({role:'assistant',content:reply});
+  } catch(e){ removeTyping(); addMsg('客服暂时无法连接，请稍后再试','bot'); }
+  csWaiting=false; document.getElementById('hermesCsSend').disabled=false;
+}
+
+setTimeout(()=>{document.getElementById('hermesCsBadge').classList.add('show')},3000);
+</script>
+</body>
+</html>

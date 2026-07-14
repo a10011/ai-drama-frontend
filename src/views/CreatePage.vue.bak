@@ -1,0 +1,119 @@
+<template>
+  <div class="create-page">
+    <div class="card">
+      <h2>新建创作</h2>
+      <div class="form-group">
+        <label>上传剧本文件</label>
+        <div class="upload-zone" @click="$refs.fileInput.click()" @dragover.prevent @drop.prevent="handleDrop">
+          <input ref="fileInput" type="file" accept=".txt,.doc,.docx,.md" hidden @change="handleFile" />
+          <span v-if="!fileName">点击或拖拽上传剧本文件 (txt/doc/md)</span>
+          <span v-else>📄 {{ fileName }}</span>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>或手动输入剧本梗概</label>
+        <textarea v-model="prompt" rows="4" placeholder="输入短剧梗概，例如：一个社畜在深夜加班时发现自己养的绿植会说话..."></textarea>
+      </div>
+      <div class="form-row">
+        <div class="form-group flex-1">
+          <label>类型</label>
+          <select v-model="genre">
+            <option value="">请选择</option>
+            <option value="都市">都市</option>
+            <option value="古装">古装</option>
+            <option value="科幻">科幻</option>
+            <option value="悬疑">悬疑</option>
+            <option value="奇幻">奇幻</option>
+            <option value="民国">民国</option>
+          </select>
+        </div>
+        <div class="form-group flex-1">
+          <label>角色数</label>
+          <input v-model.number="charCount" type="number" min="1" max="10" />
+        </div>
+        <div class="form-group flex-1">
+          <label>时长(秒)</label>
+          <input v-model.number="duration" type="number" min="15" max="300" value="30" />
+        </div>
+      </div>
+      <div v-if="estimate" class="estimate-box">
+        <span>预估消耗: <strong>{{ estimate }}点</strong></span>
+        <span v-if="balance > 0" :class="balance >= estimate ? 'text-green' : 'text-red'">
+          余额: {{ balance }}点 {{ balance >= estimate ? '✅ 充足' : '❌ 不足' }}
+        </span>
+      </div>
+      <div class="actions">
+        <button class="btn btn-primary" @click="submit" :disabled="submitting || (!prompt && !fileName)">
+          {{ submitting ? '提交中...' : '开始创作' }}
+        </button>
+        <div v-if="error" class="error-msg">{{ error }}</div>
+      </div>
+    </div>
+  </div>
+</template>
+<script>
+export default {
+  data(){return{prompt:'',genre:'都市',charCount:2,duration:30,fileName:'',fileContent:'',estimate:0,balance:0,submitting:false,error:''}},
+  methods:{
+    async handleFile(e){
+      const f=e.target.files[0];if(!f)return
+      this.fileName=f.name
+      const text=await f.text()
+      this.fileContent=text
+      this.prompt=text.slice(0,500)
+    },
+    handleDrop(e){
+      const f=e.dataTransfer.files[0];if(!f)return
+      this.fileName=f.name
+      const reader=new FileReader()
+      reader.onload=(e)=>{this.fileContent=e.target.result;this.prompt=e.target.result.slice(0,500)}
+      reader.readAsText(f)
+    },
+    async loadBalance(){
+      try{const r=await(await fetch('/v2/balance/check',{headers:{'Authorization':'***'+localStorage.getItem('token')}})).json();if(r.success)this.balance=r.data.balance}catch(e){}
+    },
+    async submit(){
+      this.error=''
+      const premise=this.fileContent||this.prompt
+      if(!premise){this.error='请输入剧本';return}
+      this.submitting=true
+      try{
+        const r=await(await fetch('/api/v1/pipeline/run',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'***'+localStorage.getItem('token')},body:JSON.stringify({premise,genre:this.genre,characters:[],mode:'standard'})})).json()
+        if(r.success){
+          const id=r.data?.task_id||r.data?.id||Date.now()
+          this.$router.push('/track/'+id)
+        }else{
+          this.error=r.error||'提交失败'
+        }
+      }catch(e){this.error='网络错误: '+e.message}
+      finally{this.submitting=false}
+    },
+    async calcEstimate(){
+      try{const r=await(await fetch('/v2/balance/estimate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({character_count:this.charCount})})).json();if(r.success)this.estimate=r.data.total_points}catch(e){}
+    }
+  },
+  watch:{charCount:{immediate:true,handler(){this.calcEstimate()}}},
+  mounted(){this.loadBalance()}
+}
+</script>
+<style scoped>
+.create-page{max-width:700px;margin:0 auto}
+.card{background:#fff;border-radius:12px;padding:24px;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.card h2{margin-bottom:20px;font-size:18px}
+.form-group{margin-bottom:16px}
+.form-group label{display:block;font-size:13px;color:#666;margin-bottom:6px;font-weight:500}
+.form-row{display:flex;gap:12px}
+.flex-1{flex:1}
+textarea,input,select{width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none}
+textarea:focus,input:focus,select:focus{border-color:#6366f1}
+.upload-zone{border:2px dashed #ddd;border-radius:8px;padding:24px;text-align:center;cursor:pointer;color:#999;font-size:14px}
+.upload-zone:hover{border-color:#6366f1;color:#6366f1}
+.estimate-box{display:flex;justify-content:space-between;padding:12px 16px;background:#f0fdf4;border-radius:8px;font-size:14px;margin:16px 0}
+.text-green{color:#16a34a}
+.text-red{color:#dc2626}
+.actions{margin-top:16px}
+.btn{padding:12px 32px;border:none;border-radius:8px;font-size:15px;cursor:pointer;font-weight:600}
+.btn-primary{background:#6366f1;color:#fff}
+.btn-primary:disabled{opacity:.5;cursor:not-allowed}
+.error-msg{color:#dc2626;font-size:13px;margin-top:8px}
+</style>

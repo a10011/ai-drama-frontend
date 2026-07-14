@@ -1,0 +1,94 @@
+<template>
+  <div class="track-page">
+    <div class="card">
+      <div class="track-header">
+        <h2>作品进度</h2>
+        <span class="status-badge" :class="status">{{ statusText }}</span>
+      </div>
+      <div v-if="loading" class="empty">加载中...</div>
+      <div v-else-if="loadError" class="empty">
+        <span>⚠️</span>
+        <p>加载进度失败</p>
+        <button class="btn-retry" @click="poll">重试</button>
+      </div>
+      <div v-else class="stage-list">
+        <div v-for="(s, i) in stages" :key="i" class="stage-item" :class="s.status">
+          <div class="stage-icon">{{ iconMap[s.name] || '●' }}</div>
+          <div class="stage-info">
+            <div class="stage-name">{{ nameMap[s.name] || s.name }}</div>
+            <div class="stage-status">{{ statusMap[s.status] }}</div>
+          </div>
+          <div class="stage-progress" v-if="s.status==='running'">
+            <div class="progress-bar"><div class="progress-fill" :style="{width:(s.progress||0)+'%'}"></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="track-actions" v-if="status==='succeeded'">
+        <button class="btn btn-primary" @click="$router.push('/result/'+id)">查看作品</button>
+      </div>
+    </div>
+  </div>
+</template>
+<script>
+const STAGES = ['script','director','character','storyboard','scene','tts','subtitle','bgm','video','composite']
+const NAMES = {script:'剧本',director:'导演分析',character:'角色设计',storyboard:'分镜',scene:'场景',tts:'配音',subtitle:'字幕',bgm:'配乐',video:'视频',composite:'合成'}
+const ICONS = {script:'📝',director:'🎬',character:'👤',storyboard:'📋',scene:'🌄',tts:'🎙️',subtitle:'💬',bgm:'🎵',video:'🎥',composite:'🎞️'}
+const STATUS_MAP = {queued:'排队中',running:'运行中',succeeded:'已完成',failed:'失败',skipped:'跳过'}
+const POLL_INTERVAL = 5000
+export default {
+  data(){return{id:this.$route.params.id,stages:[],status:'running',timer:null,detail:{},loading:true,loadError:false}},
+  computed:{statusText(){return STATUS_MAP[this.status]||this.status},nameMap(){return NAMES},iconMap(){return ICONS},statusMap(){return STATUS_MAP}},
+  methods:{
+    async poll(){
+      this.loading=!this.stages.length
+      this.loadError=false
+      try{
+        const token=localStorage.getItem('token')
+        const r=await(await fetch('/api/v1/pipeline/status/'+this.id,{
+          headers:{'Authorization':'Bearer '+token}
+        })).json()
+        if(r.success){
+          this.detail=r.data||r
+          this.status=r.data?.status||'running'
+          if(r.data?.stages)this.stages=r.data.stages
+          else if(r.data?.stage_progress){
+            const progs=r.data.stage_progress
+            this.stages=STAGES.map(s=>({name:s,status:progs[s]?.status||'queued',progress:progs[s]?.progress||0}))
+          }
+          if(this.status==='succeeded'||this.status==='failed'){clearInterval(this.timer);this.timer=null}
+        }
+      }catch(e){console.error('加载进度失败',e);this.loadError=true}
+      this.loading=false
+    }
+  },
+  mounted(){this.poll();this.timer=setInterval(()=>this.poll(),POLL_INTERVAL)},
+  beforeUnmount(){if(this.timer)clearInterval(this.timer)}
+}
+</script>
+<style scoped>
+.track-page{max-width:700px;margin:0 auto}
+.card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:24px}
+.track-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
+.track-header h2{font-size:18px;color:var(--text-primary)}
+.empty{padding:40px;text-align:center;color:var(--text-muted)}
+.btn-retry{margin-top:12px;padding:8px 20px;background:linear-gradient(135deg,var(--accent),var(--highlight));color:var(--text-primary);border:none;border-radius:var(--radius-sm);font-size:13px;cursor:pointer}
+.status-badge{padding:4px 12px;border-radius:12px;font-size:12px;font-weight:600}
+.status-badge.running{background:var(--accent-glow);color:var(--highlight)}
+.status-badge.succeeded{background:rgba(0,230,118,.1);color:var(--success)}
+.status-badge.failed{background:rgba(255,82,82,.1);color:var(--danger)}
+.stage-list{display:flex;flex-direction:column;gap:8px}
+.stage-item{display:flex;align-items:center;gap:12px;padding:12px;border-radius:var(--radius-sm);background:var(--bg-input);border-left:3px solid var(--border)}
+.stage-item.succeeded{border-left-color:var(--success);background:rgba(0,230,118,.05)}
+.stage-item.running{border-left-color:var(--highlight);background:var(--accent-glow)}
+.stage-item.failed{border-left-color:var(--danger);background:rgba(255,82,82,.05)}
+.stage-icon{font-size:20px;width:30px;text-align:center}
+.stage-info{flex:1}
+.stage-name{font-size:14px;font-weight:500;color:var(--text-primary)}
+.stage-status{font-size:12px;color:var(--text-muted)}
+.stage-progress{width:100px}
+.progress-bar{height:4px;background:var(--border);border-radius:2px;overflow:hidden}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--highlight));border-radius:2px;transition:width .5s}
+.track-actions{margin-top:20px;text-align:center}
+.btn{padding:12px 32px;border:none;border-radius:var(--radius-sm);font-size:15px;cursor:pointer;font-weight:600}
+.btn-primary{background:linear-gradient(135deg,var(--accent),var(--highlight));color: var(--text-primary)}
+</style>

@@ -1,0 +1,66 @@
+﻿@media (max-width: 768px) {
+  input, textarea, select, .el-input__inner, .el-textarea__inner {
+    font-size: 16px !important; min-height: 44px !important;
+  }
+  .el-button, button:not(.icon-btn):not(.tool-btn) {
+    min-height: 44px !important; font-size: 15px !important;
+  }
+  .page-title { font-size: 16px !important; }
+  h1 { font-size: 20px !important; }
+  h2 { font-size: 17px !important; }
+  .glass-card, .card, .el-card { padding: 12px !important; }
+  table { display: block !important; overflow-x: auto !important; white-space: nowrap !important; }
+  .content-area { padding: 12px !important; }
+}
+
+@media (max-width: 600px) {
+  .sidebar { display: none !important; }
+  .main-area { margin-left: 0 !important; }
+  .search-box { display: none !important; }
+  .top-tools-bar { overflow-x: auto !important; flex-wrap: nowrap !important; padding: 8px 12px !important; gap: 2px !important; }
+  .top-tools-bar .tool-btn { flex-shrink: 0 !important; padding: 6px 10px !important; font-size: 12px !important; }
+  .top-bar { padding: 8px 12px !important; }
+  .app-layout { padding-bottom: 60px !important; }
+  .content-area { padding: 8px !important; }
+  .user-name { display: none !important; }
+  .top-bar-right { gap: 4px !important; }
+  .icon-btn { width: 28px !important; height: 28px !important; }
+  .user-btn { padding: 2px 4px !important; }
+  .user-avatar { width: 22px !important; height: 22px !important; }
+  .page-title { font-size: 15px !important; }
+}
+
+.mobile-nav { display: none !important; }
+
+@media (max-width: 600px) {
+  .mobile-nav {
+    display: flex !important;
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    height: 56px;
+    background: rgba(10,10,22,0.95);
+    backdrop-filter: blur(20px);
+    border-top: 1px solid rgba(255,255,255,0.06);
+    z-index: 1000;
+    justify-content: space-around;
+    align-items: center;
+    padding: 0 4px;
+  }
+  .mobile-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    color: #6b7280;
+    font-size: 10px;
+    transition: all 0.15s;
+    background: transparent;
+    border: none;
+    min-width: 48px;
+  }
+  .mobile-nav-item.active { color: #818cf8; }
+  .mobile-nav-item i { font-size: 18px; }
+}

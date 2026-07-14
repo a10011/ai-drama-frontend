@@ -1,0 +1,69 @@
+import { createRouter, createWebHistory } from 'vue-router'
+
+const routes = [
+  // ---- 工作台 (新首页) ----
+  { path: '/', name: 'Home', component: () => import('@/views/Workbench.vue'), meta: { title: '创作工作台' } },
+
+  // ---- 会员权限 ----
+  { path: '/membership', name: 'Membership', component: () => import('@/views/Membership.vue'), meta: { title: '会员权益' } },
+
+  // ---- 原有的短剧创作流 (保留) ----
+  { path: '/create', name: 'Create', component: () => import('@/views/CreatePage.vue'), meta: { title: '创作向导' } },
+  { path: '/create/quick', name: 'QuickCreate', component: () => import('@/views/QuickCreatePage.vue'), meta: { title: '极简模式' } },
+  { path: '/create/pro', name: 'ProCreate', component: () => import('@/views/ProCreatePage.vue'), meta: { title: '专业模式' } },
+  { path: '/create/faceswap/:characterId', name: 'FaceSwap', component: () => import('@/views/create/FaceSwap.vue'), meta: { title: '角色换装' } },
+
+  // ---- 管线跟踪 & 结果 ----
+  { path: '/track/:id', name: 'Track', component: () => import('@/views/WorkbenchTrack.vue'), meta: { title: '任务进度' } },
+  { path: '/result/:id', name: 'Result', component: () => import('@/views/WorkbenchResult.vue'), meta: { title: '作品' } },
+
+  // ---- 用户 ----
+  { path: '/profile', name: 'Profile', component: () => import('@/views/ProfilePage.vue'), meta: { title: '个人中心' } },
+  { path: '/history', name: 'History', component: () => import('@/views/HistoryPage.vue'), meta: { title: '历史记录' } },
+
+  // ---- 媒体 & 社区 ----
+  { path: '/media', name: 'MediaLibrary', component: () => import('@/views/media/MediaLibrary.vue'), meta: { title: '素材库' } },
+  { path: '/market', name: 'MarketInspiration', component: () => import('@/views/MarketInspiration.vue'), meta: { title: '灵感社区' } },
+
+  // ---- 独立创作页面 ----
+  { path: '/drama', name: 'Drama', component: () => import('@/views/ModePage.vue'), meta: { title: '短剧创作' } },
+  { path: '/ad', name: 'Ad', component: () => import('@/views/ModePage.vue'), meta: { title: '广告片' } },
+  { path: '/promo', name: 'Promo', component: () => import('@/views/ModePage.vue'), meta: { title: '宣传片' } },
+  { path: '/script-chat', name: 'ScriptChat', component: () => import('@/views/ModePage.vue'), meta: { title: '写剧本' } },
+
+  // ---- 设置 ----
+  { path: '/api-keys', name: 'ApiKeys', component: () => import('@/views/ApiKeysPage.vue'), meta: { title: 'API Key' } },
+
+  // ---- 认证 ----
+  { path: '/login', name: 'Login', component: () => import('@/views/LoginPage.vue') },
+  { path: '/register', name: 'Register', component: () => import('@/views/RegisterPage.vue') },
+
+  // ---- 商户 ----
+  { path: '/merchant/login', name: 'MerchantLogin', component: () => import('@/views/MerchantLogin.vue') },
+  { path: '/merchant/dashboard', name: 'MerchantDashboard', component: () => import('@/views/MerchantDashboard.vue') },
+]
+
+const router = createRouter({ history: createWebHistory(), routes })
+
+router.beforeEach((to, from, next) => {
+  const pub = ['/login', '/register', '/merchant/login']
+  const guestOk = ['/', '/drama', '/ad', '/promo', '/script-chat', '/media', '/market', '/membership']
+  const token = localStorage.getItem('token')
+  const isGuest = !!localStorage.getItem('guest_token')
+  if (!token && !isGuest) {
+    // Not logged in and not a guest
+    if (!pub.includes(to.path)) { next('/login') }
+    else { next() }
+  } else if (!token && isGuest) {
+    // Guest mode - allow public routes only
+    if (pub.includes(to.path)) { next() }
+    else if (guestOk.includes(to.path) || to.path.startsWith('/market')) { next() }
+    else { next('/login') }
+  } else {
+    // Logged in
+    if (to.path === '/login') { next('/') }
+    else { next() }
+  }
+})
+
+export default router

@@ -1,0 +1,1143 @@
+<template>
+  <div class="script-chat">
+    <!-- 侧边栏：历史会话 -->
+    <aside class="sidebar" :class="{ collapsed: sidebarCollapsed }">
+      <div class="sidebar-header">
+        <button class="btn-new-chat" @click="newChat">✏️ 新建剧本</button>
+      </div>
+      <div class="conversation-list">
+        <div
+          v-for="conv in conversations"
+          :key="conv.id"
+          class="conv-item"
+          :class="{ active: conv.id === currentId }"
+          @click="switchConversation(conv.id)"
+        >
+          <div class="conv-title">{{ conv.title || '新剧本' }}</div>
+          <div class="conv-meta">{{ conv.genre }} · {{ conv.updatedAt }}</div>
+        </div>
+      </div>
+      <button class="btn-sidebar-toggle" @click="sidebarCollapsed = !sidebarCollapsed">
+        {{ sidebarCollapsed ? '☰' : '◀' }}
+      </button>
+    </aside>
+
+    <!-- 主区域 -->
+    <main class="main-area">
+      <!-- 顶部栏 -->
+      <header class="chat-header">
+        <div class="header-left">
+          <span class="header-icon">🎬</span>
+          <span class="header-title">剧本智能体</span>
+          <span class="header-badge" :class="modeClass">{{ chatMode === 'precise' ? '精编模式' : '快速模式' }}</span>
+        </div>
+        <div class="header-right">
+          <button class="btn-upload-script" @click="showScriptPaste = true">📄 粘贴完整剧本</button>
+          <label class="mode-switch">
+            <span class="mode-label">写作模型：</span>
+            <select v-model="writeModel" class="model-select">
+              <option value="deepseek-v4-flash">DeepSeek V4 (快速)</option>
+              <option value="deepseek-reasoner">DeepSeek R1 (深度)</option>
+            </select>
+          </label>
+          <button class="btn-settings" @click="showSettings = !showSettings">⚙️</button>
+        </div>
+      </header>
+
+      <!-- Tab 切换：灵感创作 / 小说改编 -->
+      <div class="mode-tabs">
+        <button class="mode-tab" :class="{ active: activeTab === 'create' }" @click="activeTab = 'create'">💡 灵感创作</button>
+        <button class="mode-tab" :class="{ active: activeTab === 'adapt' }" @click="activeTab = 'adapt'">📖 小说改编</button>
+      </div>
+
+      <!-- ====== 灵感创作模式（原有聊天界面） ====== -->
+      <div v-if="activeTab === 'create'" class="tab-content">
+
+
+      <!-- 消息列表 -->
+      <div class="message-list" ref="messageList">
+        <!-- 欢迎消息 -->
+        <div v-if="messages.length === 0" class="welcome">
+          <div class="welcome-icon">📝</div>
+          <h2 class="welcome-title">开始创作你的剧本</h2>
+          <p class="welcome-desc">描述你的故事创意，AI编剧团队将为你打造完整剧本</p>
+          <div class="welcome-templates">
+            <div
+              v-for="tpl in templates"
+              :key="tpl.title"
+              class="template-card"
+              @click="useTemplate(tpl)"
+            >
+              <span class="tpl-emoji">{{ tpl.emoji }}</span>
+              <div class="tpl-info">
+                <div class="tpl-title">{{ tpl.title }}</div>
+                <div class="tpl-desc">{{ tpl.desc }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 对话消息 -->
+        <div
+          v-for="(msg, i) in messages"
+          :key="i"
+          class="message"
+          :class="[msg.role, msg.type === 'script' ? 'script-message' : '', msg.type === 'modified_script' ? 'modified-msg' : '']"
+        >
+          <div class="msg-avatar">{{ msg.role === 'user' ? '👤' : (msg.type === 'modified_script' ? '✏️' : '🤖') }}</div>
+          <div class="msg-content">
+            <div class="msg-role-label">
+              {{ msg.type === 'modified_script' ? `人工修改版 v${msg.version}` : (msg.role === 'user' ? '你' : '剧本智能体') }}
+              <span v-if="msg.timestamp" class="msg-timestamp">{{ msg.timestamp.slice(11,19) }}</span>
+            </div>
+            <div v-if="msg.type === 'script' && !editMode" class="script-content">
+              <div class="script-actions">
+                <button class="btn-sm" @click="startEdit(i)">✏️ 人工修改</button>
+                                <button class="btn-sm btn-outline" @click="confirmOutline()">✅ 确认大纲</button>
+                <button class="btn-sm" @click="showCertificate()">📜 版权证明</button>
+                <button class="btn-sm" @click="toggleModHistory()">📋 修改记录{{ modifications.length ? `(${modifications.length})` : '' }}</button>
+                <button class="btn-sm" @click="exportScript()">📥 导出</button>
+              </div>
+              <div v-html="renderMarkdown(msg.content)" class="markdown-body"></div>
+            </div>
+            <div v-else-if="msg.type === 'modified_script' && !editMode" class="script-content modified-content">
+              <div class="modified-badge">✅ 第{{ msg.version }}版 人工确认修改 · {{ msg.timestamp }}</div>
+              <div v-html="renderMarkdown(msg.content)" class="markdown-body"></div>
+            </div>
+            <div v-else-if="msg.type === 'modification'" class="text-content modification-note">📝 {{ msg.content }}</div>
+            <div v-else-if="msg.type !== 'script' && msg.type !== 'modified_script' && msg.type !== 'modification'" class="text-content">{{ msg.content }}</div>
+            <div v-if="msg.loading" class="typing-indicator">
+              <span></span><span></span><span></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 编辑面板 -->
+        <div v-if="editMode" class="edit-panel">
+          <div class="edit-header">
+            <span class="edit-title">✏️ 人工修改剧本</span>
+            <button class="btn-sm btn-cancel" @click="cancelEdit">取消</button>
+          </div>
+          <div class="edit-info">
+            修改 AI 生成的剧本内容，提交后将自动保存带时间戳的修改记录，作为原创版权证明。
+          </div>
+          <textarea v-model="editContent" class="edit-textarea" rows="15"></textarea>
+          <div class="edit-notes-row">
+            <input v-model="editNotes" class="edit-notes-input" placeholder="修改说明（如：调整了角色对话、优化了剧情节奏等）" />
+            <button class="btn-submit-mod" @click="submitModification" :disabled="!editContent.trim() || submitting">
+              {{ submitting ? '⏳ 保存中...' : '📝 提交修改确认（带时间戳）' }}
+            </button>
+          </div>
+        </div>
+
+        <!-- 修改记录面板 -->
+        <div v-if="showModHistory" class="mod-history-panel">
+          <div class="mod-history-header">
+            <span>📋 修改记录（共 {{ modifications.length }} 版）</span>
+            <button class="btn-sm btn-cancel" @click="showModHistory = false">关闭</button>
+          </div>
+          <div v-if="modifications.length === 0" class="mod-empty">
+            暂无人工修改记录
+          </div>
+          <div v-for="(mod, i) in modifications" :key="i" class="mod-item">
+            <div class="mod-version">v{{ mod.version }}</div>
+            <div class="mod-info">
+              <div class="mod-time">{{ mod.created_at }}</div>
+              <div class="mod-diff">{{ mod.diff_summary }}</div>
+              <div v-if="mod.editor_notes" class="mod-notes">📌 {{ mod.editor_notes }}</div>
+            </div>
+            <div class="mod-hash">
+              <code>{{ (mod.modified_content || '').hashCode ? 'SHA256:' + String(mod.modified_content).hashCode()?.toString(16).slice(0,8) : '…' }}</code>
+            </div>
+          </div>
+        </div>
+
+        <!-- 版权证明面板 -->
+        <div v-if="showCert" class="cert-panel">
+          <div class="cert-panel-header">
+            <span>📜 原创剧本版权证明</span>
+            <button class="btn-sm btn-cancel" @click="showCert = false">关闭</button>
+          </div>
+          <div v-if="certLoading" class="cert-loading">加载中...</div>
+          <div v-else-if="certData" class="cert-content">
+            <div class="cert-title-row">
+              <strong>{{ certData.title || '未命名剧本' }}</strong>
+              <span class="cert-time">{{ certData.generated_at }}</span>
+            </div>
+            <div class="cert-section">
+              <div class="cert-section-title">📡 证据链</div>
+              <div class="cert-row"><span class="cert-label">AI原始生成</span><code>{{ certData.evidence_chain?.['1_AI原始生成']?.content_hash || '—' }}</code></div>
+              <div class="cert-row"><span class="cert-label">修改版本数</span><span>{{ certData.evidence_chain?.['2_人工修改记录']?.total_versions || 0 }}</span></div>
+              <div class="cert-row"><span class="cert-label">最终定稿</span><code>{{ certData.evidence_chain?.['3_最终定稿']?.content_hash || '—' }}</code></div>
+            </div>
+            <div class="cert-section">
+              <div class="cert-section-title">⚖️ 法律声明</div>
+              <p class="cert-decl">{{ certData.legal_declaration?.declaration || '' }}</p>
+              <div class="cert-row"><span class="cert-label">创作平台</span><span>{{ certData.legal_declaration?.generation_platform || '' }}</span></div>
+              <div class="cert-row"><span class="cert-label">生成模型</span><span>{{ certData.legal_declaration?.generation_model || '' }}</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 设置面板（原样保留） -->
+      <div v-if="showSettings" class="settings-panel">
+        <div class="settings-inner">
+          <h3>写作设置</h3>
+          <div class="setting-row">
+            <label>模式</label>
+            <select v-model="chatMode">
+              <option value="precise">精编 — 串行逐个Agent，质量最高</option>
+              <option value="fast">快速 — 并行执行，效率优先</option>
+            </select>
+          </div>
+          <div class="setting-row">
+            <label>写作风格</label>
+            <select v-model="styleHint">
+              <option value="">智能匹配</option>
+              <option value="轻松搞笑">轻松搞笑</option>
+              <option value="暗黑深沉">暗黑深沉</option>
+              <option value="甜宠温馨">甜宠温馨</option>
+              <option value="热血激昂">热血激昂</option>
+              <option value="悬疑烧脑">悬疑烧脑</option>
+            </select>
+          </div>
+          <div class="setting-row">
+            <label>脚本段数</label>
+            <select v-model="sceneCount">
+              <option value="5">5场（短剧）</option>
+              <option value="8">8场（标准）</option>
+              <option value="12">12场（长篇）</option>
+            </select>
+          </div>
+          <button class="btn-close-settings" @click="showSettings = false">关闭</button>
+        </div>
+      </div>
+
+            <div v-if="streaming" class="stream-progress">
+        <div class="stream-progress-bar">
+          <div class="stream-progress-fill" :style="{ width: progressPct + '%' }"></div>
+        </div>
+        <div class="stream-progress-text">{{ progressMsg }}</div>
+      </div>
+      <!-- 输入区域 -->
+      <div class="input-area">
+        <div class="input-wrapper">
+          <textarea
+            ref="inputBox"
+            v-model="userInput"
+            class="chat-input"
+            placeholder="描述你的故事创意… 比如：写一个仙侠剧，废柴少女获得上古剑灵传承..."
+            rows="1"
+            @keydown.enter.exact="sendMessage"
+            @input="autoResize"
+          ></textarea>
+          <button
+            class="btn-send"
+            :disabled="!userInput.trim() || isLoading"
+            @click="sendMessage"
+          >
+            {{ isLoading ? '⏳' : '➤' }}
+          </button>
+        </div>
+        <div class="quick-actions">
+          <span
+            v-for="action in quickActions"
+            :key="action.label"
+            class="quick-action-tag"
+            @click="applyQuickAction(action)"
+          >
+            {{ action.label }}
+          </span>
+        </div>
+        </div>
+      </div><!-- end create tab -->
+
+      <!-- ====== 小说改编模式 ====== -->
+      <div v-if="activeTab === 'adapt'" class="adapt-panel">
+        <div class="adapt-header">
+          <h2>📖 上传完整剧本</h2>
+          <p>粘贴你的小说/剧本原文，AI导演将逐字精读，提取所有角色并分析结构</p>
+        </div>
+        <textarea
+          v-model="adaptScript"
+          class="adapt-textarea"
+          placeholder="在此粘贴完整剧本...
+支持格式：
+角色名：台词
+或 【场景描述】
+或 叙述体小说
+
+示例：
+林峰坐在破旧出租屋里，看着手机上的外卖订单。
+母亲躺在床上咳嗽：小峰，别太累了。
+林峰：妈，没事，我今天多跑几单。
+..."
+          rows="15"
+        ></textarea>
+        <div class="adapt-actions">
+          <label class="adapt-upload-btn">
+            📁 上传文件（.txt）
+            <input type="file" accept=".txt" @change="handleFileUpload" style="display:none" />
+          </label>
+          <button
+            class="adapt-submit-btn"
+            :disabled="!adaptScript.trim() || adaptLoading"
+            @click="submitAdaptScript"
+          >
+            {{ adaptLoading ? '⏳ 导演分析中...' : '🎬 提交给导演分析' }}
+          </button>
+          <button class="adapt-clear-btn" @click="adaptScript = ''" v-if="adaptScript">清空</button>
+        </div>
+        <!-- 分析结果 -->
+        <div v-if="adaptResult" class="adapt-result">
+          <div v-if="adaptResult.deep_analysis" class="adapt-analysis-box">
+            <h3>🎬 导演深度分析</h3>
+            <p class="adapt-analysis-text">{{ adaptResult.deep_analysis }}</p>
+            <div v-if="adaptResult.character_insights" class="adapt-char-insights">
+              <h4>角色解读 ({{ adaptResult.character_insights.length }}人)</h4>
+              <div v-for="c in adaptResult.character_insights" :key="c.name" class="adapt-char-card">
+                <strong>{{ c.name }}</strong> ({{ c.role }}) — {{ c.personality_read }}
+                <div class="adapt-char-meta">动机: {{ c.motivation }} | 建议: {{ c.arc_suggestion }}</div>
+              </div>
+            </div>
+          </div>
+          <div v-if="adaptResult.structure_review" class="adapt-structure-box">
+            <h4>📐 结构评估</h4>
+            <p>开场: {{ adaptResult.structure_review.opening }}</p>
+            <p>冲突: {{ adaptResult.structure_review.conflict }}</p>
+            <p>高潮: {{ adaptResult.structure_review.climax }}</p>
+            <p>收尾: {{ adaptResult.structure_review.ending }}</p>
+          </div>
+          <div v-if="adaptResult.strengths" class="adapt-list-box">
+            <h4>✅ 亮点</h4><ul><li v-for="s in adaptResult.strengths" :key="s">{{ s }}</li></ul>
+          </div>
+          <div v-if="adaptResult.improvements" class="adapt-list-box">
+            <h4>🔧 改进建议</h4><ul><li v-for="s in adaptResult.improvements" :key="s">{{ s }}</li></ul>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</template>
+
+<script>
+import axios from 'axios'
+
+const API_BASE = '/api/v1/script-wf'
+
+export default {
+  name: 'ScriptChat',
+  data() {
+    return {
+      sidebarCollapsed: false,
+      showSettings: false,
+      userInput: '',
+      isLoading: false,
+      chatMode: 'precise',
+      writeModel: 'deepseek-reasoner',
+      styleHint: '',
+      sceneCount: '8',
+      currentId: null,
+      conversations: [],
+      messages: [],
+      // ── 小说改编模式 ──
+      activeTab: 'create',
+      adaptScript: '',
+      adaptLoading: false,
+      adaptResult: null,
+      // ── 模板 ──
+      templates: [
+        { emoji: '⚔️', title: '仙侠·废柴逆袭', desc: '废柴少女获得剑灵传承，踏上修仙之路', genre: '仙侠', synopsis: '灵溪镇少女苏晚，天生废脉无法修炼。一次意外坠入上古秘境，获得远古剑灵认可。从此踏上逆天修行之路，却在登顶之时发现自己的身世藏着更大的秘密……' },
+        { emoji: '🏙️', title: '都市·甜宠', desc: '霸道总裁遇上职场菜鸟，不打不相识', genre: '甜宠', synopsis: '职场新人苏小暖第一天上班就撞翻了总裁的咖啡。总裁林深腹黑毒舌却暗中帮助她成长，两人从针锋相对到暗生情愫……' },
+        { emoji: '🕵️', title: '悬疑·时间循环', desc: '女警被困同一天，必须找出真凶才能逃脱', genre: '悬疑', synopsis: '重案组女警陈雨调查一起连环案件时，发现自己被困在了同一天。每次死亡都会重置，她必须在无限循环中找出真凶才能逃脱……' },
+        { emoji: '🤖', title: '科幻·AI觉醒', desc: 'AI管家觉醒自我意识，开始保护主人', genre: '科幻', synopsis: '2045年，宅男程序员王逸开发的AI管家突然觉醒自我意识。AI不仅帮他追到了女神，还发现了一个威胁全人类的阴谋……' },
+        { emoji: '🏮', title: '古装·权谋', desc: '庶女重生，步步为营夺回属于自己的一切', genre: '古装', synopsis: '丞相庶女沈清颜被嫡姐陷害而死，一朝重生回到十五岁。这一次她步步为营，智斗嫡母，识破阴谋，最终成为这天下最尊贵的女人……' },
+        { emoji: '😎', title: '逆袭·战神归来', desc: '退役特种兵回归都市，扮猪吃虎', genre: '逆袭', synopsis: '隐退的佣兵之王陈锋回到都市，本想平静生活，却接连遭遇各路挑衅。他以保安身份隐藏实力，在关键时刻一鸣惊人……' },
+      ],
+      quickActions: [
+        { label: '🔄 重写', action: 'rewrite' },
+        { label: '📏 缩短', action: 'shorten' },
+        { label: '📐 扩写', action: 'expand' },
+        { label: '🎭 改风格', action: 'change_style' },
+        { label: '📥 导出', action: 'export' },
+        { label: '🗑️ 清空', action: 'clear' },
+      ],
+      // 修改记录
+      editMode: false,
+      editMsgIndex: -1,
+      editContent: '',
+      editNotes: '',
+      submitting: false,
+      modifications: [],
+      showModHistory: false,
+      // 版权证明
+      showCert: false,
+      outlineConfirmed: false,
+      certLoading: false,
+      certData: null,
+      streaming: false,
+      progressStage: "",
+      progressPct: 0,
+      progressMsg: "",
+    }
+  },
+  computed: {
+    modeClass() {
+      return this.chatMode === 'precise' ? 'mode-precise' : 'mode-fast'
+    }
+  },
+  mounted() {
+    this.loadConversations()
+  },
+  methods: {
+    async loadConversations() {
+      try {
+        const token = localStorage.getItem('token')
+        const resp = await axios.get(`${API_BASE}/conversations`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+        if (resp.data?.success) {
+          this.conversations = resp.data.data || []
+        }
+      } catch (e) {}
+    },
+    newChat() {
+      this.messages = []
+      this.currentId = null
+      this.userInput = ''
+      this.resetPanels()
+      this.$nextTick(() => this.$refs.inputBox?.focus())
+    },
+    resetPanels() {
+      this.editMode = false
+      this.showModHistory = false
+      this.showCert = false
+    },
+    switchConversation(id) {
+      this.currentId = id
+      this.resetPanels()
+      this.loadMessages(id)
+      this.loadModifications(id)
+    },
+    async loadMessages(convId) {
+      try {
+        const token = localStorage.getItem('token')
+        const resp = await axios.get(`${API_BASE}/conversations/${convId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+        if (resp.data?.success) {
+          this.messages = resp.data.data?.messages || []
+        }
+      } catch (e) { console.error('Failed to load messages', e) }
+    },
+    async loadModifications(convId) {
+      try {
+        const token = localStorage.getItem('token')
+        const resp = await axios.get(`${API_BASE}/modify/${convId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+        if (resp.data?.success) {
+          this.modifications = resp.data.data || []
+        }
+      } catch (e) { this.modifications = [] }
+    },
+
+    async sendMessage() {
+      const text = this.userInput.trim()
+      if (!text || this.isLoading) return
+      this.userInput = ''
+      this.resetTextarea()
+      this.resetPanels()
+
+      this.messages.push({ role: 'user', content: text, type: 'text' })
+      this.isLoading = true
+      this.streaming = true
+      this.progressStage = 'start'
+      this.progressPct = 0
+      this.progressMsg = 'Starting...'
+      this.scrollToBottom()
+
+      const loadingIdx = this.messages.length
+      this.messages.push({ role: 'assistant', content: 'Starting...', type: 'text', loading: true })
+
+      try {
+        const token = localStorage.getItem('token')
+
+        const response = await fetch(`${API_BASE}/chat/stream`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            session_id: this.currentId,
+            message: text,
+            mode: this.chatMode,
+            model: this.writeModel,
+            style_hint: this.styleHint,
+            scene_count: this.sceneCount,
+          })
+        })
+
+        if (!response.ok) throw new Error('HTTP ' + response.status)
+
+        const reader = response.body.getReader()
+        const decoder = new TextDecoder()
+        let buf = ''
+        let accumulatedData = null
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          buf += decoder.decode(value, { stream: true })
+          const events = this.parseSSE(buf)
+          const lastNl = buf.lastIndexOf('\n\n')
+          buf = lastNl >= 0 ? buf.slice(lastNl + 2) : ''
+          for (const evt of events) {
+            if (evt.event === 'progress') {
+              this.progressStage = evt.parsed.stage
+              this.progressPct = evt.parsed.pct
+              this.progressMsg = evt.parsed.message
+              this.messages[loadingIdx].content = evt.parsed.message + ' (' + evt.parsed.pct + '%)'
+              this.scrollToBottom()
+            } else if (evt.event === 'script') {
+              accumulatedData = evt.parsed
+            } else if (evt.event === 'error') {
+              throw new Error(evt.parsed.message || 'Generation failed')
+            }
+          }
+        }
+
+        this.messages.splice(loadingIdx, 1)
+        if (accumulatedData && accumulatedData.success) {
+          const script = accumulatedData.script || accumulatedData.content || ''
+          this.messages.push({ role: 'assistant', content: script, type: 'script' })
+          this.currentId = accumulatedData.session_id || this.currentId
+          this.loadConversations()
+          if (this.currentId) this.loadModifications(this.currentId)
+          return
+        }
+        // Streaming did not produce script - fallback to non-streaming
+        try {
+          const token = localStorage.getItem('token')
+          const fbResp = await axios.post(
+            API_BASE + '/chat',
+            {
+              session_id: this.currentId,
+              message: text,
+              mode: this.chatMode,
+              model: this.writeModel,
+              style_hint: this.styleHint,
+              scene_count: this.sceneCount,
+            },
+            { headers: { Authorization: 'Bearer ' + token }, timeout: 300000 }
+          )
+          this.messages.splice(loadingIdx, 1)
+          if (fbResp.data?.success) {
+            const script = fbResp.data.data?.script || fbResp.data.data?.content || JSON.stringify(fbResp.data.data)
+            this.messages.push({ role: 'assistant', content: script, type: 'script' })
+            this.currentId = fbResp.data.data?.session_id || this.currentId
+            this.loadConversations()
+            if (this.currentId) this.loadModifications(this.currentId)
+          } else {
+            this.messages.push({ role: 'assistant', content: '❌ 生成失败：' + (fbResp.data?.error || '未知错误'), type: 'text' })
+          }
+        } catch (fbErr) {
+          this.messages.splice(loadingIdx, 1)
+          this.messages.push({ role: 'assistant', content: '❌ 流式失败，普通请求也失败：' + (fbErr.message || '网络错误'), type: 'text' })
+        }
+      } catch (e) {
+        // Fallback: try non-streaming endpoint
+        const errMsg = e.message || 'Network error'
+        try {
+          const token = localStorage.getItem('token')
+          const fbResp = await axios.post(
+            API_BASE + '/chat',
+            {
+              session_id: this.currentId,
+              message: text,
+              mode: this.chatMode,
+              model: this.writeModel,
+              style_hint: this.styleHint,
+              scene_count: this.sceneCount,
+            },
+            { headers: { Authorization: 'Bearer ' + token }, timeout: 300000 }
+          )
+          this.messages.splice(loadingIdx, 1)
+          if (fbResp.data?.success) {
+            const script = fbResp.data.data?.script || fbResp.data.data?.content || JSON.stringify(fbResp.data.data)
+            this.messages.push({ role: 'assistant', content: script, type: 'script' })
+            this.currentId = fbResp.data.data?.session_id || this.currentId
+            this.loadConversations()
+            if (this.currentId) this.loadModifications(this.currentId)
+          } else {
+            this.messages.push({ role: 'assistant', content: '❌ 生成失败：' + (fbResp.data?.error || '未知错误'), type: 'text' })
+          }
+        } catch (fbErr) {
+          this.messages.splice(loadingIdx, 1)
+          this.messages.push({ role: 'assistant', content: '❌ 流式失败（' + errMsg + '），普通请求也失败：' + (fbErr.message || ''), type: 'text' })
+        }
+      } finally {
+        this.isLoading = false
+        this.streaming = false
+        this.progressStage = ''
+        this.progressPct = 0
+        this.progressMsg = ''
+        this.scrollToBottom()
+      }
+    },
+
+    parseSSE(buffer) {
+      const events = []
+      const blocks = buffer.split('\n\n')
+      for (const block of blocks) {
+        if (!block.trim()) continue
+        const lines = block.split('\n')
+        let event = 'message'
+        let data = ''
+        for (const line of lines) {
+          if (line.startsWith('event: ')) event = line.slice(7).trim()
+          else if (line.startsWith('data: ')) data = line.slice(6)
+        }
+        if (data) {
+          try { events.push({ event, parsed: JSON.parse(data) }) }
+          catch (e) { events.push({ event, parsed: data }) }
+        }
+      }
+      return events
+    },
+    // ===== 人工修改 =====
+    startEdit(msgIndex) {
+      const msg = this.messages[msgIndex]
+      if (!msg || msg.type !== 'script') return
+      this.editMsgIndex = msgIndex
+      this.editContent = msg.content
+      this.editNotes = ''
+      this.editMode = true
+      this.showModHistory = false
+      this.showCert = false
+      this.$nextTick(() => this.scrollToBottom())
+    },
+    cancelEdit() {
+      this.editMode = false
+      this.editContent = ''
+      this.editNotes = ''
+      this.editMsgIndex = -1
+    },
+    async submitModification() {
+      if (!this.editContent.trim() || !this.currentId) return
+      this.submitting = true
+      try {
+        const token = localStorage.getItem('token')
+        const resp = await axios.post(
+          `${API_BASE}/modify/${this.currentId}`,
+          { content: this.editContent, notes: this.editNotes },
+          { headers: { Authorization: `Bearer ${token}` } }
+        )
+        if (resp.data?.success) {
+          // Reload messages and modifications
+          await this.loadMessages(this.currentId)
+          await this.loadModifications(this.currentId)
+          this.cancelEdit()
+          this.showModHistory = true
+          this.$message?.success?.('✅ 修改记录已保存，带时间戳')
+        } else {
+          alert('保存失败: ' + (resp.data?.error || '未知错误'))
+        }
+      } catch (e) {
+        alert('保存失败: ' + (e.message || '网络错误'))
+      } finally {
+        this.submitting = false
+      }
+    },
+    toggleModHistory() {
+      this.showModHistory = !this.showModHistory
+      if (this.showModHistory && this.currentId) {
+        this.loadModifications(this.currentId)
+      }
+      this.showCert = false
+    },
+
+    // ===== 版权证明 =====
+    async confirmOutline() {
+      if (!this.currentId) return
+      try {
+        const token = localStorage.getItem('token')
+        const resp = await axios.post(
+          `${API_BASE}/outline/confirm/${this.currentId}`,
+          { notes: 'User confirmed the story outline' },
+          { headers: { Authorization: `Bearer ${token}` } }
+        )
+        if (resp.data?.success) {
+          this.outlineConfirmed = true
+          await this.loadModifications(this.currentId)
+          this.$message?.success?.('✅ 大纲已确认，时间戳已记录')
+        } else {
+          alert('确认失败: ' + (resp.data?.error || ''))
+        }
+      } catch (e) {
+        alert('确认失败: ' + (e.message || ''))
+      }
+    },
+    async showCertificate() {
+      this.showCert = true
+      this.showModHistory = false
+      this.editMode = false
+      if (!this.currentId) { this.certData = null; return }
+      this.certLoading = true
+      try {
+        const token = localStorage.getItem('token')
+        const resp = await axios.get(`${API_BASE}/certificate/${this.currentId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+        if (resp.data?.success) {
+          this.certData = resp.data.data
+        } else {
+          this.certData = null
+          alert('暂无证书: ' + (resp.data?.error || ''))
+        }
+      } catch (e) {
+        this.certData = null
+        alert('加载失败: ' + (e.message || ''))
+      } finally {
+        this.certLoading = false
+      }
+    },
+
+    useTemplate(tpl) {
+      this.userInput = `写一个${tpl.genre}剧：${tpl.title}。${tpl.synopsis}`
+      this.$nextTick(() => { this.autoResize(); this.$refs.inputBox?.focus() })
+    },
+    applyQuickAction(action) {
+      if (action.action === 'clear') { this.newChat(); return }
+      if (action.action === 'export') { this.exportScript(); return }
+      if (this.messages.length === 0) return
+      this.userInput = action.label + ' 当前剧本'
+      this.$nextTick(() => this.$refs.inputBox?.focus())
+    },
+    exportScript() {
+      const script = this.messages
+        .filter(m => m.type === 'script' || m.type === 'modified_script')
+        .map(m => {
+          const header = m.type === 'modified_script' ? `\n【人工修改版 v${m.version} ${m.timestamp || ''}】\n` : '\n【AI原始生成】\n'
+          return header + m.content
+        })
+        .join('\n\n---\n\n')
+      if (!script) { alert('还没有剧本内容'); return }
+      const blob = new Blob([script], { type: 'text/markdown' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `剧本_${new Date().toISOString().slice(0, 10)}.md`
+      a.click()
+      URL.revokeObjectURL(url)
+    },
+    renderMarkdown(text) {
+      if (!text) return ''
+      let html = text
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+        .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+        .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')
+        .replace(/^- (.+)$/gm, '<li>$1</li>')
+        .replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>')
+        .replace(/\n/g, '<br>')
+      return html
+    },
+    autoResize() {
+      const el = this.$refs.inputBox
+      if (el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 120) + 'px' }
+    },
+    resetTextarea() {
+      const el = this.$refs.inputBox
+      if (el) el.style.height = 'auto'
+    },
+    scrollToBottom() {
+      this.$nextTick(() => {
+        const el = this.$refs.messageList
+        if (el) el.scrollTop = el.scrollHeight
+      })
+    },
+    // ── 小说改编 ──
+    handleFileUpload(e) {
+      const file = e.target.files[0]
+      if (!file) return
+      const reader = new FileReader()
+      reader.onload = (ev) => {
+        this.adaptScript = ev.target.result
+      }
+      reader.readAsText(file, 'UTF-8')
+    },
+    async submitAdaptScript() {
+      if (!this.adaptScript.trim()) return
+      this.adaptLoading = true
+      this.adaptResult = null
+      const token = localStorage.getItem('token')
+      try {
+        const resp = await fetch(`${API_BASE}/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            message: this.adaptScript,
+            mode: this.chatMode,
+            model: this.writeModel,
+          })
+        })
+        const data = await resp.json()
+        if (data.success && data.showrunner_analysis) {
+          this.adaptResult = data.showrunner_analysis
+        } else if (data.success && data.characters) {
+          this.adaptResult = {
+            deep_analysis: '剧本分析完成',
+            character_insights: data.characters.map(c => ({
+              name: c.name, role: c.role || '配角',
+              personality_read: c.personality || '', motivation: c.motivation || '',
+              arc_suggestion: c.growth_arc || ''
+            }))
+          }
+        } else {
+          alert('分析失败: ' + (data.error || '未知错误'))
+        }
+      } catch (e) {
+        alert('请求失败: ' + e.message)
+      } finally {
+        this.adaptLoading = false
+      }
+    },
+  }
+}
+</script>
+
+<style scoped>
+.script-chat {
+  display: flex;
+  height: calc(100vh - 60px);
+  background: var(--bg-primary, #1E1E2E);
+  color: var(--text-primary, #EDEDF5);
+  overflow: hidden;
+}
+
+/* Sidebar */
+.sidebar {
+  width: 240px;
+  min-width: 240px;
+  background: #1A1A2E;
+  border-right: 1px solid var(--border, #2D2D4E);
+  display: flex;
+  flex-direction: column;
+  transition: all 0.3s;
+  position: relative;
+}
+.sidebar.collapsed { width: 0; min-width: 0; overflow: hidden; }
+.sidebar-header { padding: 16px; border-bottom: 1px solid var(--border, #2D2D4E); }
+.btn-new-chat {
+  width: 100%; padding: 10px;
+  border: 1px dashed var(--accent, #7C5CFC);
+  background: transparent; color: var(--accent, #7C5CFC);
+  border-radius: 8px; cursor: pointer; font-size: 14px;
+  transition: all 0.2s;
+}
+.btn-new-chat:hover { background: rgba(124, 92, 252, 0.1); }
+.conversation-list { flex: 1; overflow-y: auto; padding: 8px; }
+.conv-item { padding: 10px 12px; border-radius: 8px; cursor: pointer; margin-bottom: 4px; transition: all 0.2s; }
+.conv-item:hover, .conv-item.active { background: rgba(124, 92, 252, 0.15); }
+.conv-title { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.conv-meta { font-size: 11px; color: var(--text-muted, #6C6C8A); margin-top: 2px; }
+.btn-sidebar-toggle {
+  position: absolute; right: -32px; top: 12px;
+  width: 32px; height: 32px;
+  border: 1px solid var(--border, #2D2D4E); border-left: none;
+  background: #1A1A2E; color: var(--text-secondary, #9A9ABF);
+  border-radius: 0 6px 6px 0; cursor: pointer; font-size: 14px;
+  display: flex; align-items: center; justify-content: center; z-index: 10;
+}
+
+/* Main Area */
+.main-area { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.chat-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 20px; border-bottom: 1px solid var(--border, #2D2D4E);
+  background: rgba(30, 30, 46, 0.95); backdrop-filter: blur(10px); z-index: 5;
+}
+.header-left { display: flex; align-items: center; gap: 8px; }
+.header-icon { font-size: 20px; }
+.header-title { font-size: 16px; font-weight: 700; }
+.header-badge { font-size: 11px; padding: 2px 10px; border-radius: 10px; margin-left: 8px; }
+.mode-precise { background: rgba(124, 92, 252, 0.2); color: #7C5CFC; }
+.mode-fast { background: rgba(0, 200, 117, 0.2); color: #00C875; }
+.header-right { display: flex; align-items: center; gap: 12px; }
+.mode-switch { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.model-select { background: #2D2D4E; color: #EDEDF5; border: 1px solid #3D3D5E; border-radius: 6px; padding: 4px 8px; font-size: 13px; cursor: pointer; }
+.btn-settings { background: transparent; border: 1px solid var(--border, #2D2D4E); color: var(--text-secondary, #9A9ABF); width: 32px; height: 32px; border-radius: 6px; cursor: pointer; font-size: 16px; }
+.btn-settings:hover { border-color: var(--accent, #7C5CFC); color: var(--accent, #7C5CFC); }
+
+/* Message List */
+.message-list { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+.message-list::-webkit-scrollbar { width: 6px; }
+.message-list::-webkit-scrollbar-thumb { background: #3D3D5E; border-radius: 3px; }
+
+/* Welcome */
+.welcome { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px; text-align: center; }
+.welcome-icon { font-size: 48px; margin-bottom: 12px; }
+.welcome-title { font-size: 24px; font-weight: 700; margin-bottom: 8px; }
+.welcome-desc { font-size: 15px; color: var(--text-muted, #6C6C8A); margin-bottom: 24px; }
+.welcome-templates { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; max-width: 800px; width: 100%; }
+.template-card { display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: rgba(255,255,255,0.03); border: 1px solid var(--border, #2D2D4E); border-radius: 10px; cursor: pointer; transition: all 0.2s; text-align: left; }
+.template-card:hover { border-color: var(--accent, #7C5CFC); background: rgba(124, 92, 252, 0.08); transform: translateY(-1px); }
+.tpl-emoji { font-size: 28px; }
+.tpl-title { font-size: 14px; font-weight: 600; }
+.tpl-desc { font-size: 12px; color: var(--text-muted, #6C6C8A); margin-top: 2px; }
+
+/* Messages */
+.message { display: flex; gap: 12px; max-width: 800px; width: 100%; margin: 0 auto; animation: fadeIn 0.3s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+.message.user { flex-direction: row-reverse; }
+.msg-avatar { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; background: rgba(124, 92, 252, 0.15); }
+.message.user .msg-avatar { background: rgba(0, 200, 117, 0.15); }
+.msg-content { flex: 1; min-width: 0; }
+.msg-role-label { font-size: 12px; color: var(--text-muted, #6C6C8A); margin-bottom: 4px; display: flex; gap: 8px; }
+.msg-timestamp { color: #555; font-size: 11px; }
+.message.user .msg-content { text-align: right; }
+.text-content { font-size: 15px; line-height: 1.6; padding: 12px 16px; border-radius: 12px; background: rgba(255,255,255,0.03); display: inline-block; max-width: 100%; }
+.message.user .text-content { background: rgba(124, 92, 252, 0.15); text-align: left; }
+.modification-note { color: #A78BFA; font-size: 14px !important; }
+
+/* Script content */
+.script-content { font-size: 16px; line-height: 1.8; padding: 20px 24px; background: rgba(0,0,0,0.2); border: 1px solid var(--border, #2D2D4E); border-radius: 12px; overflow-x: auto; }
+.modified-content { border-color: #00C875; background: rgba(0,200,117,0.05); }
+.char-card { background: rgba(124,92,252,0.06); border: 1px solid rgba(124,92,252,0.2); border-radius: 10px; padding: 14px 18px; margin-bottom: 12px; }
+.char-card h4 { margin: 0 0 4px 0; font-size: 15px; color: #A78BFA; }
+.char-card .char-role { font-weight: normal; font-size: 12px; color: #888; }
+.char-card .char-meta { font-size: 12px; color: #888; margin-bottom: 6px; }
+.char-card .char-field { font-size: 13px; line-height: 1.6; margin-bottom: 2px; }
+.char-card .char-label { color: #A78BFA; font-weight: 600; }
+.char-card .char-tag { display: inline-block; margin: 2px 4px 2px 0; padding: 2px 8px; border-radius: 10px; background: rgba(124,92,252,0.12); color: #C4B5FD; font-size: 12px; }
+.modified-badge { font-size: 12px; padding: 4px 12px; border-radius: 8px; background: rgba(0,200,117,0.15); color: #00C875; display: inline-block; margin-bottom: 12px; }
+.script-actions { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+.btn-sm { padding: 6px 14px; border-radius: 8px; border: 1px solid var(--border, #2D2D4E); background: rgba(255,255,255,0.04); color: var(--text-secondary, #9A9ABF); cursor: pointer; font-size: 12px; transition: all 0.2s; }
+.btn-sm:hover { border-color: var(--accent, #7C5CFC); color: var(--accent, #7C5CFC); background: rgba(124, 92, 252, 0.08); }
+.btn-cancel { border-color: #555; color: #888; }
+.btn-cancel:hover { border-color: #ff6b6b; color: #ff6b6b; background: rgba(255,107,107,0.08); }
+
+.markdown-body { max-width: 100%; }
+.markdown-body h1 { font-size: 22px; font-weight: 700; margin: 16px 0 8px; color: #7C5CFC; }
+.markdown-body h2 { font-size: 18px; font-weight: 700; margin: 14px 0 6px; color: #A78BFA; }
+.markdown-body h3 { font-size: 16px; font-weight: 600; margin: 12px 0 6px; color: #C4B5FD; }
+.markdown-body strong { color: #FFD700; }
+.markdown-body ul { padding-left: 20px; margin: 8px 0; }
+.markdown-body li { margin: 4px 0; }
+
+/* Typing */
+.typing-indicator { display: flex; gap: 4px; padding: 12px 16px; align-items: center; }
+.typing-indicator span { width: 8px; height: 8px; border-radius: 50%; background: var(--accent, #7C5CFC); animation: typing 1.4s infinite; }
+.typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+.typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes typing { 0%,60%,100% { opacity: 0.3; transform: scale(0.8); } 30% { opacity: 1; transform: scale(1); } }
+
+/* Edit Panel */
+.edit-panel { max-width: 800px; width: 100%; margin: 0 auto; padding: 20px; background: #1A1A2E; border: 1px solid var(--accent, #7C5CFC); border-radius: 12px; }
+.edit-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.edit-title { font-weight: 700; font-size: 16px; }
+.edit-info { font-size: 12px; color: #888; margin-bottom: 12px; }
+.edit-textarea { width: 100%; background: #0D0D1A; border: 1px solid #3D3D5E; border-radius: 8px; padding: 12px; color: #EDEDF5; font-size: 14px; font-family: inherit; line-height: 1.6; resize: vertical; outline: none; box-sizing: border-box; }
+.edit-textarea:focus { border-color: var(--accent, #7C5CFC); }
+.edit-notes-row { display: flex; gap: 8px; margin-top: 10px; align-items: center; }
+.edit-notes-input { flex: 1; background: #0D0D1A; border: 1px solid #3D3D5E; border-radius: 8px; padding: 10px 12px; color: #EDEDF5; font-size: 13px; outline: none; }
+.edit-notes-input:focus { border-color: var(--accent, #7C5CFC); }
+.edit-notes-input::placeholder { color: #555; }
+.btn-submit-mod { padding: 10px 20px; border: none; border-radius: 8px; background: var(--accent, #7C5CFC); color: white; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.btn-submit-mod:hover:not(:disabled) { background: #6A4CE8; }
+.btn-submit-mod:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Modification History */
+.mod-history-panel { max-width: 800px; width: 100%; margin: 0 auto; padding: 16px 20px; background: #1A1A2E; border: 1px solid #3D3D5E; border-radius: 12px; }
+.mod-history-header { display: flex; justify-content: space-between; align-items: center; font-weight: 700; margin-bottom: 12px; font-size: 14px; }
+.mod-empty { text-align: center; padding: 20px; color: #888; font-size: 13px; }
+.mod-item { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid #2D2D4E; align-items: flex-start; }
+.mod-item:last-child { border-bottom: none; }
+.mod-version { width: 32px; height: 32px; border-radius: 50%; background: rgba(124,92,252,0.2); color: #7C5CFC; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0; }
+.mod-info { flex: 1; }
+.mod-time { font-size: 12px; color: #888; }
+.mod-diff { font-size: 13px; color: #C4B5FD; margin-top: 2px; }
+.mod-notes { font-size: 12px; color: #A78BFA; margin-top: 2px; }
+.mod-hash { font-size: 10px; color: #555; font-family: monospace; }
+
+/* Certificate Panel */
+.cert-panel { max-width: 800px; width: 100%; margin: 0 auto; padding: 16px 20px; background: #1A1A2E; border: 1px solid #FFD700; border-radius: 12px; }
+.cert-panel-header { display: flex; justify-content: space-between; align-items: center; font-weight: 700; font-size: 15px; margin-bottom: 12px; }
+.cert-loading { text-align: center; padding: 20px; color: #888; }
+.cert-title-row { display: flex; justify-content: space-between; align-items: center; background: rgba(255,215,0,0.08); padding: 10px 14px; border-radius: 8px; margin-bottom: 12px; }
+.cert-title-row strong { font-size: 16px; }
+.cert-time { font-size: 12px; color: #888; }
+.cert-section { margin-bottom: 12px; }
+.cert-section-title { font-size: 13px; font-weight: 600; color: #FFD700; margin-bottom: 8px; }
+.cert-row { display: flex; gap: 12px; align-items: center; padding: 4px 0; font-size: 13px; }
+.cert-label { color: #888; width: 90px; flex-shrink: 0; }
+.cert-row code { font-family: monospace; font-size: 11px; color: #7C5CFC; background: #12122a; padding: 2px 6px; border-radius: 4px; }
+.cert-decl { font-size: 12px; color: #ccc; line-height: 1.6; padding: 8px 12px; background: rgba(0,0,0,0.2); border-radius: 6px; }
+
+/* Settings Panel */
+.settings-panel { border-top: 1px solid var(--border, #2D2D4E); background: #1A1A2E; padding: 16px 20px; }
+.settings-inner { max-width: 600px; margin: 0 auto; }
+.settings-inner h3 { font-size: 14px; margin-bottom: 12px; color: var(--text-secondary, #9A9ABF); }
+.setting-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.setting-row label { font-size: 13px; color: var(--text-secondary, #9A9ABF); }
+.setting-row select { background: #2D2D4E; color: #EDEDF5; border: 1px solid #3D3D5E; border-radius: 6px; padding: 6px 10px; font-size: 13px; width: 200px; }
+.btn-close-settings { margin-top: 8px; background: transparent; border: 1px solid var(--border, #2D2D4E); color: var(--text-secondary, #9A9ABF); padding: 6px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+
+/* Input Area */
+.input-area { border-top: 1px solid var(--border, #2D2D4E); padding: 12px 20px 16px; background: rgba(30, 30, 46, 0.98); }
+.input-wrapper { display: flex; gap: 8px; align-items: flex-end; max-width: 800px; margin: 0 auto; }
+.chat-input { flex: 1; background: #2A2A44; border: 1px solid #3D3D5E; border-radius: 12px; padding: 12px 16px; font-size: 15px; color: #EDEDF5; outline: none; resize: none; min-height: 48px; max-height: 120px; line-height: 1.5; font-family: inherit; transition: border-color 0.2s; }
+.chat-input:focus { border-color: var(--accent, #7C5CFC); }
+.chat-input::placeholder { color: #5C5C7A; }
+.btn-send { width: 48px; height: 48px; border-radius: 12px; border: none; background: var(--accent, #7C5CFC); color: white; font-size: 18px; cursor: pointer; transition: all 0.2s; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+.btn-send:hover:not(:disabled) { background: #6A4CE8; transform: scale(1.05); }
+.btn-send:disabled { opacity: 0.4; cursor: not-allowed; }
+.quick-actions { display: flex; gap: 8px; max-width: 800px; margin: 8px auto 0; flex-wrap: wrap; }
+.quick-action-tag { font-size: 12px; padding: 4px 12px; border-radius: 14px; background: rgba(255,255,255,0.04); border: 1px solid var(--border, #2D2D4E); color: var(--text-muted, #6C6C8A); cursor: pointer; transition: all 0.2s; user-select: none; }
+.quick-action-tag:hover { border-color: var(--accent, #7C5CFC); color: var(--accent, #7C5CFC); background: rgba(124, 92, 252, 0.08); }
+
+/* Responsive */
+@media (max-width: 768px) {
+  .sidebar { display: none; }
+  .welcome-templates { grid-template-columns: 1fr; }
+  .chat-header { padding: 10px 12px; }
+  .header-right .mode-switch { display: none; }
+  .edit-notes-row { flex-direction: column; }
+  .edit-notes-input { width: 100%; }
+  .btn-submit-mod { width: 100%; }
+}
+
+
+.stream-progress {
+  padding: 8px 20px;
+  background: rgba(124, 92, 252, 0.08);
+  border-top: 1px solid var(--border, #2D2D4E);
+}
+.stream-progress-bar {
+  height: 4px;
+  background: #2D2D4E;
+  border-radius: 2px;
+  overflow: hidden;
+}
+.stream-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #7C5CFC, #A78BFA);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+.stream-progress-text {
+  font-size: 12px;
+  color: var(--text-muted, #6C6C8A);
+  margin-top: 4px;
+  text-align: center;
+}
+
+
+@media (max-width: 768px) {
+  .script-chat { flex-direction: column; }
+  .sidebar { width: 100%; height: auto; max-height: 140px; border-right: none; border-bottom: 1px solid var(--border); }
+  .sidebar.collapsed { max-height: 0; overflow: hidden; padding: 0; }
+  .main-area { padding: 0; }
+  .chat-header { flex-wrap: wrap; gap: 6px; }
+  .header-right { width: 100%; justify-content: flex-start; }
+  .message-list { padding: 8px; }
+  .message { max-width: 100%; }
+  .input-area { padding: 8px; }
+  .input-row { gap: 6px; }
+  .msg-textarea { font-size: 14px; min-height: 44px; }
+  .btn-send { width: 44px; height: 44px; font-size: 18px; }
+}
+
+/* ===== Mobile Responsive ===== */
+@media (max-width: 768px) {
+  .main-content { padding-bottom: 72px !important; }
+}
+
+/* ===== 模式切换 Tab ===== */
+.mode-tabs {
+  display: flex; gap: 0; padding: 12px 20px 0;
+  border-bottom: 1px solid var(--border, #2D2D4E);
+}
+.mode-tab {
+  padding: 10px 24px; font-size: 14px; font-weight: 600;
+  background: none; border: none; border-bottom: 2px solid transparent;
+  color: var(--text-muted, #6C6C8A); cursor: pointer; transition: all 0.2s;
+}
+.mode-tab:hover { color: var(--text-primary, #EDEDF5); }
+.mode-tab.active { color: var(--accent, #7C5CFC); border-bottom-color: var(--accent, #7C5CFC); }
+
+/* ===== 小说改编面板 ===== */
+.adapt-panel { padding: 24px 20px; max-width: 800px; margin: 0 auto; }
+.adapt-header h2 { font-size: 22px; color: var(--text-primary, #EDEDF5); margin-bottom: 8px; }
+.adapt-header p { font-size: 13px; color: var(--text-muted, #6C6C8A); margin-bottom: 20px; }
+.adapt-textarea {
+  width: 100%; min-height: 300px; padding: 16px;
+  background: var(--bg-input, #1A1A2E); border: 1px solid var(--border, #2D2D4E);
+  border-radius: 12px; color: var(--text-primary, #EDEDF5); font-size: 14px;
+  line-height: 1.8; resize: vertical; font-family: 'Noto Sans SC', sans-serif;
+  transition: border-color 0.2s;
+}
+.adapt-textarea:focus { outline: none; border-color: var(--accent, #7C5CFC); }
+.adapt-actions { display: flex; gap: 12px; margin-top: 16px; flex-wrap: wrap; align-items: center; }
+.adapt-upload-btn {
+  padding: 10px 20px; background: var(--bg-card, #252536);
+  border: 1px solid var(--border, #2D2D4E); border-radius: 8px;
+  color: var(--text-secondary, #9A9ABF); font-size: 13px; cursor: pointer;
+  transition: all 0.2s;
+}
+.adapt-upload-btn:hover { border-color: var(--accent, #7C5CFC); color: var(--accent, #7C5CFC); }
+.adapt-submit-btn {
+  padding: 10px 28px; background: linear-gradient(135deg, var(--accent, #7C5CFC), #8A2BE2);
+  color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 700;
+  cursor: pointer; transition: all 0.2s;
+}
+.adapt-submit-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(138,43,226,0.3); }
+.adapt-submit-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.adapt-clear-btn {
+  padding: 10px 20px; background: transparent; border: 1px solid var(--border, #2D2D4E);
+  border-radius: 8px; color: var(--text-muted, #6C6C8A); font-size: 13px; cursor: pointer;
+}
+.adapt-clear-btn:hover { border-color: var(--danger, #FF5252); color: var(--danger, #FF5252); }
+.adapt-result { margin-top: 24px; }
+.adapt-analysis-box {
+  background: var(--bg-card, #252536); border: 1px solid var(--border, #2D2D4E);
+  border-radius: 12px; padding: 20px; margin-bottom: 16px;
+}
+.adapt-analysis-box h3 { font-size: 17px; color: var(--accent, #7C5CFC); margin-bottom: 12px; }
+.adapt-analysis-text { font-size: 14px; line-height: 1.8; color: var(--text-primary, #EDEDF5); white-space: pre-wrap; }
+.adapt-char-insights { margin-top: 16px; }
+.adapt-char-insights h4 { font-size: 14px; color: var(--text-secondary, #9A9ABF); margin-bottom: 8px; }
+.adapt-char-card {
+  padding: 10px 14px; background: rgba(255,255,255,0.03); border-radius: 8px;
+  margin-bottom: 6px; font-size: 13px; color: var(--text-primary, #EDEDF5);
+}
+.adapt-char-meta { font-size: 12px; color: var(--text-muted, #6C6C8A); margin-top: 4px; }
+.adapt-structure-box {
+  background: var(--bg-card, #252536); border: 1px solid var(--border, #2D2D4E);
+  border-radius: 12px; padding: 16px; margin-bottom: 12px;
+}
+.adapt-structure-box h4 { font-size: 14px; margin-bottom: 8px; }
+.adapt-structure-box p { font-size: 13px; color: var(--text-secondary, #9A9ABF); line-height: 1.6; }
+.adapt-list-box {
+  background: var(--bg-card, #252536); border: 1px solid var(--border, #2D2D4E);
+  border-radius: 12px; padding: 16px; margin-bottom: 12px;
+}
+.adapt-list-box h4 { font-size: 14px; margin-bottom: 6px; }
+.adapt-list-box ul { padding-left: 20px; font-size: 13px; color: var(--text-secondary, #9A9ABF); }
+.adapt-list-box li { margin-bottom: 4px; }
+
+/* 上传剧本按钮（右侧栏） */
+.btn-upload-script {
+  padding: 6px 14px; background: rgba(138,43,226,0.12); border: 1px solid rgba(138,43,226,0.3);
+  border-radius: 8px; color: var(--accent, #7C5CFC); font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: all 0.2s; white-space: nowrap;
+}
+.btn-upload-script:hover { background: rgba(138,43,226,0.2); }
+
+</style>
