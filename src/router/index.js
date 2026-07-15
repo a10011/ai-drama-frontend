@@ -9,11 +9,10 @@ const routes = [
   { path: '/track/:id', name: 'Track', component: () => import('@/views/TrackPage.vue'), meta: { title: '进度' } },
   { path: '/result/:id', name: 'Result', component: () => import('@/views/ResultPage.vue'), meta: { title: '作品' } },
   { path: '/profile', name: 'Profile', component: () => import('@/views/ProfilePage.vue'), meta: { title: '个人中心' } },
+  { path: '/projects', name: 'Projects', component: () => import('@/views/projects/ProjectsPage.vue'), meta: { title: '我的作品' } },
   { path: '/history', name: 'History', component: () => import('@/views/HistoryPage.vue'), meta: { title: '历史' } },
   { path: '/login', name: 'Login', component: () => import('@/views/LoginPage.vue') },
   { path: '/register', name: 'Register', component: () => import('@/views/RegisterPage.vue') },
-  { path: '/merchant/login', name: 'MerchantLogin', component: () => import('@/views/MerchantLogin.vue') },
-  { path: '/merchant/dashboard', name: 'MerchantDashboard', component: () => import('@/views/MerchantDashboard.vue') },
   { path: '/membership', name: 'Membership', component: () => import('@/views/Membership.vue'), meta: { title: '会员权益' } },
   { path: '/media', name: 'MediaLibrary', component: () => import('@/views/media/MediaLibrary.vue'), meta: { title: '素材库' } },
   { path: '/market', name: 'SharedMarket', component: () => import('@/views/market/SharedMarket.vue'), meta: { title: '灵感社区' } },
@@ -24,7 +23,7 @@ const routes = [
 const router = createRouter({ history: createWebHistory(), routes })
 
 router.beforeEach((to, from, next) => {
-  const pub = ['/', '/login', '/register', '/merchant/login', '/create/pro', '/create', '/create/quick', '/membership', '/media', '/market', '/api-keys', '/script-chat', '/result']
+  const pub = ['/', '/login', '/register', '/create/pro', '/create', '/create/quick', '/membership', '/media', '/market', '/api-keys', '/script-chat', '/result']
   const token = localStorage.getItem('token')
   if (!token && !pub.includes(to.path)) { next('/login') }
   else { next() }
