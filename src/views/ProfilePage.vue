@@ -148,7 +148,7 @@ export default {
   },
   methods: {
     authHeaders() {
-      return { 'Authorization': '***' + this.token }
+      return { 'Authorization': 'Bearer ' + this.token }
     },
     async loadData() {
       this.token = localStorage.getItem('token') || ''

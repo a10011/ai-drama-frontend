@@ -101,7 +101,7 @@ export default {
       }
       try {
         const keysRes = await fetch('/api/v1/user-keys/', {
-          headers: { 'Authorization': localStorage.getItem('token') }
+          headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
         })
         const keysData = await keysRes.json()
         if (keysData.success) {
@@ -138,7 +138,7 @@ export default {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': localStorage.getItem('token')
+            'Authorization': 'Bearer ' + localStorage.getItem('token')
           },
           body: JSON.stringify({
             provider: provider,
@@ -163,7 +163,7 @@ export default {
       try {
         const res = await fetch('/api/v1/user-keys/' + provider, {
           method: 'DELETE',
-          headers: { 'Authorization': localStorage.getItem('token') }
+          headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
         })
         const data = await res.json()
         if (data.success) {

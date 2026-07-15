@@ -2,11 +2,12 @@ const http = require('http');
 const crypto = require('crypto');
 
 const PORT = parseInt(process.argv[2] || '3457');
+const ALLOWED_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5173';
 
 function json(res, data, code = 200) {
   res.writeHead(code, {
     'Content-Type': 'application/json; charset=utf-8',
-    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization'
   });
@@ -44,7 +45,7 @@ const REPLIES = {
 
 const server = http.createServer(async (req, res) => {
   // CORS
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   

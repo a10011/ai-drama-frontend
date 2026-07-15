@@ -76,7 +76,7 @@ export default {
       } finally { this.logging = false }
     },
     enterAsGuest() {
-      localStorage.setItem('guest_token', 'guest_' + Date.now())
+      localStorage.setItem('guest_token', 'guest_' + crypto.randomUUID())
       this.$router.push('/')
     },
   },

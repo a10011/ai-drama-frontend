@@ -22,3 +22,22 @@ yarn-error.log*
 
 # Build
 *.tsbuildinfo
+
+# Backup files
+*.bak
+*.bak.*
+*.bak_*
+src.bak*/
+src.previous*/
+srcviews/
+srcrouter/
+
+# Media / large binary files
+*.mp4
+*.wav
+*.jpg
+*.png
+*.svg
+!favicon.svg
+videos/
+public/*.mp4

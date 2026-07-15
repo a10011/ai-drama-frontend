@@ -87,7 +87,7 @@ export default {
   },
   methods: {
     authHeaders() {
-      return { 'Authorization': '***' + this.token }
+      return { 'Authorization': 'Bearer ' + this.token }
     },
     statusTag(s) {
       return s === 'done' ? 'tag-green' : s === 'fail' ? 'tag-red' : s === 'running' ? 'tag-blue' : 'tag-muted'

@@ -1317,7 +1317,7 @@ export default {
       this.autoGenStages = STAGE_DEFS.map(s => ({ ...s, status: 'pending', error: '' }))
 
       try {
-        const res = await apiReq('POST', '/../v2/pipeline/start', {
+        const res = await apiReq('POST', '/v2/pipeline/start', {
           script_text: this.scriptText || '',
           genre: localStorage.getItem('__DRAMA_GENRE__') || '',
           title: this.scriptText ? this.scriptText.slice(0, 20) : '短剧',
@@ -1342,7 +1342,7 @@ export default {
       if (this.autoGenPollTimer) clearInterval(this.autoGenPollTimer)
       this.autoGenPollTimer = setInterval(async () => {
         try {
-          const res = await apiReq('GET', '/../v2/pipeline/status/' + (this.v2PipelineId || ''))
+          const res = await apiReq('GET', '/v2/pipeline/status/' + (this.v2PipelineId || ''))
           if (!res.success || !res.data) return
           const v2status = res.data.status || ''
           const STAGE_ORDER = ['script','director','character','storyboard','scene','video','composite']

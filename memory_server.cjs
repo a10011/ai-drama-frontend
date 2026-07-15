@@ -4,6 +4,7 @@ const http = require('http');
 const url = require('url');
 
 const PORT = parseInt(process.argv[2] || '3456');
+const ALLOWED_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5173';
 const memories = {};
 
 const REPLIES = {
@@ -32,7 +33,7 @@ function json(res, data, code) {
   const s = JSON.stringify(data);
   res.writeHead(code, {
     'Content-Type': 'application/json; charset=utf-8',
-    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
   });
   res.end(s);
 }

@@ -8,20 +8,27 @@
 
         <!-- 中部菜单 -->
         <nav class="nav-center">
-          <router-link to="/" class="nav-item" exact-active-class="active">首页</router-link>
-          <router-link to="/create" class="nav-item" active-class="active">创作工作台</router-link>
-          <router-link to="/media" class="nav-item">素材库</router-link>
-          <router-link to="/market" class="nav-item">灵感社区</router-link>
+          <router-link to="/" class="nav-item" exact-active-class="active">文件</router-link>
+          <router-link to="/media" class="nav-item" exact-active-class="active">素材库</router-link>
+          <router-link to="/create/pro" class="nav-item" exact-active-class="active">分镜编辑</router-link>
         </nav>
 
         <!-- 右侧区域 -->
         <div class="nav-right">
+          <!-- 项目标题 -->
+          <div class="project-title" v-if="projectName">
+            项目名称：{{ projectName }}
+          </div>
+
+          <!-- 会员标签 -->
+          <div class="member-badge" :class="{ 'member-pro': userTier === 'pro' || userTier === 'enterprise' }">
+            {{ userTier === 'enterprise' ? '企业版' : (userTier === 'pro' ? '专业会员' : '免费版') }}
+          </div>
+
           <!-- 算力胶囊 -->
           <div class="power-badge" :class="{ 'power-guest': !token }">
-            <span class="power-icon">👑</span>
+            <span class="power-icon">⚡</span>
             <span v-if="token">
-              <span class="power-label">{{ userTier || 'Pro' }}</span>
-              <span class="power-divider">|</span>
               <span class="power-value">剩余 {{ creditDisplay }} 算力</span>
             </span>
             <span v-else class="power-value">点击登录</span>
@@ -66,6 +73,7 @@ export default {
       creditBalance: 0,
       userTier: '',
       username: '',
+      projectName: '',
       token: '',
       showUserMenu: false,
       showNotifications: false,
@@ -104,6 +112,7 @@ export default {
         if (r.success) {
           this.username = r.data.username || ''
           this.userTier = r.data.tier || ''
+          this.projectName = r.data.current_project || '都市复仇短剧第 01 集'
           localStorage.setItem('username', this.username)
         }
       } catch (e) { /* silent */ }
@@ -138,24 +147,23 @@ export default {
 </script>
 
 <style>
-/* ===== CSS 变量 ===== */
+/* ===== CSS 变量（UI 规范） ===== */
 :root {
-  --bg-primary: #0a0a0a;
-  --bg-card: #141414;
-  --bg-input: #1a1a1a;
-  --border: rgba(196,155,74,.12);
-  --border-focus: rgba(196,155,74,.5);
-  --accent: #c49b4a;
-  --accent-glow: rgba(196,155,74,0.25);
-  --highlight: #c49b4a;
-  --text-primary: #e8e4dc;
-  --text-secondary: #888888;
-  --text-muted: #666666;
-  --success: #4ade80;
-  --danger: #ef4444;
-  --warning: #f59e0b;
-  --radius: 12px;
-  --radius-sm: 8px;
+  --bg-primary: #14161F;
+  --bg-card: #1D202C;
+  --bg-input: #1D202C;
+  --border: rgba(255,255,255,0.08);
+  --border-focus: rgba(41,123,255,0.5);
+  --accent: #297BFF;
+  --accent-glow: rgba(41,123,255,0.25);
+  --text-primary: #E6E8EC;
+  --text-secondary: #B1B5C3;
+  --text-muted: #86909C;
+  --success: #4ADE80;
+  --danger: #EF4444;
+  --warning: #F59E0B;
+  --radius: 8px;
+  --radius-sm: 6px;
   --transition: all 0.2s ease;
 }
 
@@ -176,28 +184,25 @@ body {
 /* ===== 顶部导航栏 ===== */
 .topbar {
   height: 56px;
-  background: #0d0d0d;
+  background: #14161F;
   border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;
   z-index: 100;
-  backdrop-filter: blur(12px);
 }
 
 .topbar-inner {
-  max-width: 1200px;
-  margin: 0 auto;
   height: 100%;
   display: flex;
   align-items: center;
-  padding: 0 32px;
+  padding: 0 24px;
+  gap: 24px;
 }
 
 .logo {
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: 2px;
-  color: var(--highlight);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
   text-decoration: none;
   flex-shrink: 0;
 }
@@ -205,18 +210,20 @@ body {
 .nav-center {
   display: flex;
   align-items: center;
-  gap: 4px;
-  margin-left: 48px;
+  gap: 0;
+  margin-left: 0;
   flex: 1;
 }
 
 .nav-item {
-  padding: 8px 16px;
-  font-size: 14px;
+  padding: 0 16px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  font-size: 16px;
   font-weight: 500;
   color: var(--text-secondary);
   text-decoration: none;
-  border-radius: 8px;
   position: relative;
   transition: var(--transition);
 }
@@ -226,19 +233,18 @@ body {
 }
 
 .nav-item.active {
-  color: var(--highlight);
+  color: #FFFFFF;
 }
 
 .nav-item.active::after {
   content: '';
   position: absolute;
-  bottom: -1px;
+  bottom: 0;
   left: 50%;
   transform: translateX(-50%);
-  width: 24px;
+  width: 100%;
   height: 2px;
-  background: var(--highlight);
-  border-radius: 1px;
+  background: var(--accent);
 }
 
 .nav-right {
@@ -248,17 +254,42 @@ body {
   flex-shrink: 0;
 }
 
+/* 项目标题 */
+.project-title {
+  font-size: 15px;
+  font-weight: 400;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+/* 会员标签 */
+.member-badge {
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 600;
+  background: rgba(41,123,255,0.1);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+.member-badge.member-pro {
+  background: rgba(41,123,255,0.15);
+  color: var(--accent);
+  border-color: rgba(41,123,255,0.3);
+}
+
 /* 算力胶囊 */
 .power-badge {
   display: flex;
   align-items: center;
   gap: 6px;
   padding: 6px 14px;
-  border-radius: 20px;
-  background: rgba(30, 30, 46, 0.6);
-  border: 1px solid rgba(196, 155, 74, 0.25);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
   position: relative;
-  font-size: 12px;
+  font-size: 14px;
   color: var(--text-secondary);
 }
 
@@ -266,49 +297,9 @@ body {
   font-size: 14px;
 }
 
-.power-label {
-  color: var(--accent);
-  font-weight: 700;
-  font-size: 12px;
-  text-transform: capitalize;
-}
-
-.power-divider {
-  color: var(--text-muted);
-}
-
 .power-value {
   color: var(--text-primary);
   font-weight: 500;
-}
-
-/* 通知弹窗 */
-.notifications-panel {
-  position: absolute;
-  top: 40px;
-  right: -8px;
-  width: 300px;
-  background: #141414;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  overflow: hidden;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-  z-index: 200;
-}
-
-.notif-header {
-  padding: 12px 16px;
-  font-size: 14px;
-  font-weight: 600;
-  border-bottom: 1px solid var(--border);
-  color: var(--text-primary);
-}
-
-.notif-empty {
-  padding: 32px 16px;
-  text-align: center;
-  color: var(--text-muted);
-  font-size: 13px;
 }
 
 .power-guest {
@@ -329,12 +320,12 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   transition: var(--transition);
 }
 
 .notify-bell:hover {
-  background: rgba(196, 155, 74, 0.08);
+  background: rgba(41,123,255,0.08);
 }
 
 .bell-icon {
@@ -349,7 +340,36 @@ body {
   height: 8px;
   background: var(--danger);
   border-radius: 50%;
-  border: 2px solid #0d0d0d;
+  border: 2px solid var(--bg-primary);
+}
+
+/* 通知弹窗 */
+.notifications-panel {
+  position: absolute;
+  top: 40px;
+  right: -8px;
+  width: 300px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  z-index: 200;
+}
+
+.notif-header {
+  padding: 12px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-primary);
+}
+
+.notif-empty {
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
 }
 
 /* 用户下拉 */
@@ -381,7 +401,7 @@ body {
   top: 40px;
   right: 0;
   width: 180px;
-  background: #141414;
+  background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;
@@ -398,7 +418,7 @@ body {
 }
 
 .dropdown-item:hover {
-  background: rgba(196, 155, 74, 0.1);
+  background: rgba(41,123,255,0.1);
   color: var(--accent);
 }
 
@@ -418,9 +438,8 @@ body {
 
 /* ===== 主内容区 ===== */
 .main-content {
-  max-width: 1200px;
   margin: 0 auto;
-  padding: 24px 32px;
+  padding: 16px 24px;
   min-height: calc(100vh - 56px);
 }
 </style>

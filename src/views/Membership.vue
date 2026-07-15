@@ -222,8 +222,28 @@ export default {
         window.open('https://api.mzsh.top/api/memory/cs/chat?msg=咨询企业版套餐', '_blank')
         return
       }
-      // pro - open alipay
-      this.$router.push('/create/membership/pay?plan=pro_monthly')
+      // pro - 调支付宝创建支付
+      this.upgradePro()
+    },
+    async upgradePro() {
+      try {
+        const r = await fetch('/api/v1/alipay/create', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + this.token
+          },
+          body: JSON.stringify({ product_id: 'vip_month', quantity: 1 })
+        })
+        const data = await r.json()
+        if (data.success && data.data?.pay_url) {
+          window.location.href = data.data.pay_url
+        } else {
+          alert('创建支付失败: ' + (data.error || '未知错误'))
+        }
+      } catch (e) {
+        alert('请求失败: ' + e.message)
+      }
     },
   },
   mounted() { this.loadData() },
