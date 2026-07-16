@@ -169,6 +169,21 @@ export default {
       this.loadError = false
       try {
         const token = localStorage.getItem('token')
+        // 先查 V2 状态
+        const v2res = await fetch('/api/v1/pipeline/status/' + this.id, {
+          headers: { 'Authorization': 'Bearer ' + token }
+        }).then(r => r.json())
+        if (v2res.success && v2res.data && v2res.data.pipeline_status) {
+          // V2 管道，直接显示
+          this.stages = v2res.data.stages || []
+          this.projectStatus = v2res.data.pipeline_status
+          this.title = v2res.data.title || this.title
+          if (this.isFinished || this.projectStatus === 'completed' || this.projectStatus === 'failed') {
+            if (this.timer) { clearInterval(this.timer); this.timer = null }
+          }
+          return
+        }
+        // V1 管道
         const r = await (await fetch('/api/v1/pipeline/progress/' + this.id, {
           headers: { 'Authorization': 'Bearer ' + token }
         })).json()
@@ -222,7 +237,10 @@ export default {
     },
     async loadEpisodes() {
       try {
-        const res = await fetch('/api/v1/pipeline/episodes/' + this.id)
+        const token = localStorage.getItem('token')
+        const res = await fetch('/api/v1/pipeline/episodes/' + this.id, {
+          headers: token ? { 'Authorization': 'Bearer ' + token } : {},
+        })
         const d = await res.json()
         if (d.success) {
           this.episodes = d.episodes || []

@@ -256,7 +256,7 @@ export default {
       } catch (e) {}
       
       try {
-        const r = await fetch('/api/v1/orders', { headers: this.authHeaders() }).then(r => r.json())
+        const r = await fetch('/api/v1/orders/my', { headers: this.authHeaders() }).then(r => r.json())
         if (r.success && Array.isArray(r.data)) {
           this.orders = r.data.map(o => ({
             id: o.id,
