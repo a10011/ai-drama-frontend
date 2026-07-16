@@ -113,8 +113,20 @@ async function fetchProjects(){
   loading.value=false
 }
 
-function go(p){router.push('/track/'+p.id)}
-function continueProject(p){router.push('/track/'+p.id)}
+function go(p){
+  if (p.v2_pipeline_id) {
+    router.push('/v2/track/' + p.v2_pipeline_id)
+  } else {
+    router.push('/track/' + p.id)
+  }
+}
+function continueProject(p){
+  if (p.v2_pipeline_id) {
+    router.push('/v2/track/' + p.v2_pipeline_id)
+  } else {
+    router.push('/track/' + p.id)
+  }
+}
 
 function isCompleted(p){
   if(p.status==='completed'||p.displayStatus==='completed')return true
