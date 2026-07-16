@@ -1,10 +1,9 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import StudioPage from '@/views/StudioPage.vue'
 
 const routes = [
   { path: '/', name: 'Home', component: () => import('@/views/HomePage.vue'), meta: { title: '首页' } },
   { path: '/create', name: 'Create', component: () => import('@/views/CreatePage.vue'), meta: { title: '创作工作台' } },
-  { path: '/create/pro', name: 'Studio', component: StudioPage, meta: { title: '专业创作' } },
+  { path: '/create/pro', name: 'ProCreate', component: () => import('@/views/ProCreatePage.vue'), meta: { title: '专业共创模式' } },
   { path: '/create/faceswap/:characterId', name: 'FaceSwap', component: () => import('@/views/create/FaceSwap.vue'), meta: { title: '角色换装' } },
   { path: '/track/:id', name: 'Track', component: () => import('@/views/TrackPage.vue'), meta: { title: '进度' } },
   { path: '/result/:id', name: 'Result', component: () => import('@/views/ResultPage.vue'), meta: { title: '作品' } },

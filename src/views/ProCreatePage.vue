@@ -935,35 +935,39 @@ export default {
       while (Date.now() - start < maxWait * 1000) {
         await new Promise(r => setTimeout(r, 3000))
         try {
-          const res = await apiReq('GET', '/pipeline/progress/' + this.projectId)
-          if (res.v2_pipeline_id && res.v2_pipeline_id !== this.v2PipelineId) {
-            this.v2PipelineId = res.v2_pipeline_id
-          }
+          // 优先查 V2 状态
           if (this.v2PipelineId) {
-            try {
-              const v2res = await apiReq('GET', '/v2/pipeline/status/' + this.v2PipelineId)
-              if (v2res.data && v2res.data.status) {
-                const v2status = v2res.data.status
-                const STAGE_ORDER = ['script','director','character','storyboard','scene','video','composite']
-                // 同步更新 steps 的 done 标记
-                if (v2status === 'completed') {
-                  this.steps.forEach(s => s.done = true)
-                  this.autoGenStages.forEach(s => s.status = 'completed')
-                } else if (v2status.startsWith('running:')) {
-                  const cur = v2status.replace('running:', '')
-                  const curIdx = STAGE_ORDER.indexOf(cur)
-                  for (let i = 0; i <= curIdx && i < this.steps.length; i++) {
-                    this.steps[i].done = true
+            const v2res = await apiReq('GET', '/v2/pipeline/status/' + this.v2PipelineId)
+            if (v2res.success && v2res.data) {
+              const v2status = v2res.data.status
+              if (v2status === 'completed') {
+                // 从 assets 拿数据
+                const dbres = await apiReq('GET', '/v2/pipeline/assets/' + this.v2PipelineId)
+                if (dbres.success && dbres.data) {
+                  const stageAsset = dbres.data.find(a => a.type === stage || a.asset_type === stage)
+                  if (stageAsset && stageAsset.url) {
+                    try {
+                      return JSON.parse(stageAsset.url)
+                    } catch(e) {}
                   }
-                  this.autoGenStages.forEach(s => {
-                    const si = STAGE_ORDER.indexOf(s.key)
-                    const ci = STAGE_ORDER.indexOf(cur)
-                    s.status = si < ci ? 'completed' : (si === ci ? 'running' : 'pending')
-                  })
                 }
+                // 兜底：从 pipeline_progress 查
+                const progRes = await apiReq('GET', '/pipeline/progress/' + this.projectId)
+                if (progRes.success && progRes.data) {
+                  const stages = progRes.data.stages || []
+                  const found = stages.find(s => s.stage === stage)
+                  if (found && found.data) return found.data
+                }
+                return null
               }
-            } catch (e) {}
+              if (v2status === 'failed') {
+                console.error(stage + ' 生成失败: ' + (v2res.data.error || ''))
+                return null
+              }
+            }
           }
+          // V2 没查到，fallback 到 V1
+          const res = await apiReq('GET', '/pipeline/progress/' + this.projectId)
           if (res.success && res.data) {
             const stages = res.data.stages || res.data.shots || []
             const found = stages.find(s => s.stage === stage || s.key === stage)
