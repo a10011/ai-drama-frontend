@@ -773,28 +773,61 @@ export default {
       }
       this.extracting = true
       try {
-        const res = await apiReq('POST', '/characters/extract', {
-          project_id: this.projectId,
-          script_text: this.scriptText,
+        const res = await apiReq('POST', '/pipeline/step/' + this.projectId, {
+          stage: 'character',
+          params: { script_text: this.scriptText },
         })
-        if (res.success && res.data) {
-          const list = res.data.characters || res.data || []
-          this.characters = list.map(c => ({
+        if (res && res.v2_pipeline_id) this.v2PipelineId = res.v2_pipeline_id
+        // 轮询等 V2 完成
+        const chars = await this.pollV2ForChars()
+        if (chars && chars.length) {
+          this.characters = chars.map(c => ({
             name: c.name || '',
             gender: c.gender || '男',
             personality: c.personality || c.description || '',
-            appearance: c.appearance || '',
+            appearance: c.features || c.appearance || '',
+            wardrobe: c.wardrobe || '',
+            wardrobe_spring: c.wardrobe_spring || '',
+            wardrobe_summer: c.wardrobe_summer || '',
+            wardrobe_autumn: c.wardrobe_autumn || '',
+            wardrobe_winter: c.wardrobe_winter || '',
+            hair_accessory: c.hair_accessory || '',
+            age: c.age || '',
+            season: c.season || '',
+            growth_stages: c.growth_stages || [],
             portrait_url: c.portrait_url || '',
             ref_image: c.ref_image || '',
           }))
         } else {
-          alert('角色提取失败: ' + (res.message || '请重试'))
+          alert('角色提取失败: 请重试')
         }
       } catch (e) {
         console.error('extract characters failed:', e)
         alert('角色提取失败: 网络错误')
       }
       this.extracting = false
+    },
+
+    async pollV2ForChars() {
+      for (let i = 0; i < 20; i++) {
+        await new Promise(r => setTimeout(r, 3000))
+        try {
+          if (!this.v2PipelineId) continue
+          const res = await apiReq('GET', '/v2/pipeline/status/' + this.v2PipelineId)
+          if (res.success && res.data) {
+            if (res.data.status === 'completed') {
+              const dbres = await apiReq('GET', '/v2/pipeline/assets/' + this.v2PipelineId)
+              if (dbres.success && dbres.data) {
+                const charAsset = dbres.data.find(a => a.type === 'character' || a.asset_type === 'character')
+                if (charAsset && charAsset.url) return JSON.parse(charAsset.url)
+              }
+              return null
+            }
+            if (res.data.status === 'failed') return null
+          }
+        } catch (e) {}
+      }
+      return null
     },
 
     addCharacter() {
