@@ -945,10 +945,16 @@ export default {
               if (v2res.data && v2res.data.status) {
                 const v2status = v2res.data.status
                 const STAGE_ORDER = ['script','director','character','storyboard','scene','video','composite']
+                // 同步更新 steps 的 done 标记
                 if (v2status === 'completed') {
+                  this.steps.forEach(s => s.done = true)
                   this.autoGenStages.forEach(s => s.status = 'completed')
                 } else if (v2status.startsWith('running:')) {
                   const cur = v2status.replace('running:', '')
+                  const curIdx = STAGE_ORDER.indexOf(cur)
+                  for (let i = 0; i <= curIdx && i < this.steps.length; i++) {
+                    this.steps[i].done = true
+                  }
                   this.autoGenStages.forEach(s => {
                     const si = STAGE_ORDER.indexOf(s.key)
                     const ci = STAGE_ORDER.indexOf(cur)
