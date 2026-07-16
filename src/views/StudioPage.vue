@@ -780,7 +780,53 @@ export default {
   },
   mounted() {
     this.loadUserInfo()
+    // 从 URL 参数恢复项目
+    const route = this.$route
+    if (route.query.project_id) {
+      this.projectId = route.query.project_id
+      this.projectTitle = route.query.title || '恢复项目'
+    }
+    if (route.query.v2_pipeline_id) {
+      this.v2PipelineId = route.query.v2_pipeline_id
+    }
+    // 如果有 projectId，自动加载项目数据
+    if (this.projectId) {
+      this.loadProject(this.projectId)
+    }
   },
+
+  methods: {
+    async loadProject(id) {
+      try {
+        const res = await this.apiReq('GET', '/projects/' + id)
+        if (res.success && res.project) {
+          const data = res.project
+          this.scriptInput = data.script || data.script_text || ''
+          this.projectTitle = data.title || this.projectTitle
+          if (data.v2_pipeline_id) this.v2PipelineId = data.v2_pipeline_id
+          if (data.characters) {
+            try {
+              const chars = typeof data.characters === 'string' ? JSON.parse(data.characters) : data.characters
+              if (Array.isArray(chars)) {
+                this.characters = chars.map(c => ({
+                  name: c.name || '',
+                  age: c.age || '',
+                  season: c.season || '',
+                  wardrobe_spring: c.wardrobe_spring || c.wardrobe || '',
+                  wardrobe_summer: c.wardrobe_summer || '',
+                  wardrobe_autumn: c.wardrobe_autumn || '',
+                  wardrobe_winter: c.wardrobe_winter || '',
+                  features: c.features || c.appearance || '',
+                  hair_accessory: c.hair_accessory || '',
+                  growth_stages: c.growth_stages || [],
+                  portrait_url: c.portrait_url || '',
+                }))
+              }
+            } catch(e) {}
+          }
+        }
+      } catch(e) {}
+    },
 }
 </script>
 

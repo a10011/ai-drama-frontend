@@ -246,6 +246,7 @@ export default {
           this.worksCount = r.projects.length
           this.recentWorks = r.projects.map(p => ({
             id: p.id,
+            v2_pipeline_id: p.v2_pipeline_id || p.pipeline_id || '',
             title: p.title,
             createdAt: p.created ? new Date(p.created * 1000).toLocaleDateString('zh-CN') : '--',
             statusText: { active: '进行中', processing: '进行中', completed: '已完成', draft: '草稿' }[p.status] || p.status,
@@ -285,7 +286,12 @@ export default {
       return w.displayStatus === 'completed'
     },
     continueWork(w) {
-      this.$router.push('/track/' + w.id)
+      // V2 项目跳到 StudioPage，V1 项目跳到 TrackPage
+      if (w.v2_pipeline_id) {
+        this.$router.push('/create/pro?project_id=' + w.id + '&v2_pipeline_id=' + w.v2_pipeline_id)
+      } else {
+        this.$router.push('/track/' + w.id)
+      }
     },
     confirmDelete(w) {
       this.deleteTarget = w
