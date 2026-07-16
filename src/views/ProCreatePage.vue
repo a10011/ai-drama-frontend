@@ -654,6 +654,7 @@ export default {
       autoGenStages: [],
       autoGenStatus: 'running',
       autoGenPollTimer: null,
+      v2PipelineId: '',
 
       // 通用
       videoPreviewUrl: '',
@@ -935,12 +936,33 @@ export default {
         await new Promise(r => setTimeout(r, 3000))
         try {
           const res = await apiReq('GET', '/pipeline/progress/' + this.projectId)
+          if (res.v2_pipeline_id && res.v2_pipeline_id !== this.v2PipelineId) {
+            this.v2PipelineId = res.v2_pipeline_id
+          }
+          if (this.v2PipelineId) {
+            try {
+              const v2res = await apiReq('GET', '/v2/pipeline/status/' + this.v2PipelineId)
+              if (v2res.data && v2res.data.status) {
+                const v2status = v2res.data.status
+                const STAGE_ORDER = ['script','director','character','storyboard','scene','video','composite']
+                if (v2status === 'completed') {
+                  this.autoGenStages.forEach(s => s.status = 'completed')
+                } else if (v2status.startsWith('running:')) {
+                  const cur = v2status.replace('running:', '')
+                  this.autoGenStages.forEach(s => {
+                    const si = STAGE_ORDER.indexOf(s.key)
+                    const ci = STAGE_ORDER.indexOf(cur)
+                    s.status = si < ci ? 'completed' : (si === ci ? 'running' : 'pending')
+                  })
+                }
+              }
+            } catch (e) {}
+          }
           if (res.success && res.data) {
             const stages = res.data.stages || res.data.shots || []
             const found = stages.find(s => s.stage === stage || s.key === stage)
             if (found) {
               if (found.status === 'completed') {
-                // 返回合并了顶层字段的 data（shot_videos 等在顶层）
                 const merged = Object.assign({}, found.data || {})
                 if (res.data.shot_videos) merged.shot_videos = res.data.shot_videos
                 if (res.data.shot_video_errors) merged.shot_video_errors = res.data.shot_video_errors
@@ -951,12 +973,10 @@ export default {
                 console.error(stage + '生成失败: ' + (found.error || ''))
                 return null
               }
-              // running：继续轮询，不打断
             }
           }
         } catch (e) {}
       }
-      // 超时不弹阻塞式 alert，仅控制台提示；后端仍在跑，用户刷新可继续看结果
       console.warn(stage + ' 轮询超时，后端可能仍在运行')
       return null
     },
@@ -1240,12 +1260,40 @@ export default {
           }
         })
         console.log('[generateSingleVideo] 提交返回:', res)
+        // 同步 V2 pipeline_id
+        if (res.v2_pipeline_id && res.v2_pipeline_id !== this.v2PipelineId) {
+          this.v2PipelineId = res.v2_pipeline_id
+        }
         // 不管返回什么，开始轮询
         // 每10秒查一次 progress，最多等20分钟
         for (let attempt = 0; attempt < 120; attempt++) {
           await new Promise(r => setTimeout(r, 10000))
           try {
             const prog = await apiReq('GET', '/pipeline/progress/' + this.projectId)
+            // V2 状态同步
+            if (prog.v2_pipeline_id && prog.v2_pipeline_id !== this.v2PipelineId) {
+              this.v2PipelineId = prog.v2_pipeline_id
+            }
+            if (this.v2PipelineId) {
+              try {
+                const v2res = await apiReq('GET', '/v2/pipeline/status/' + this.v2PipelineId)
+                if (v2res.data && v2res.data.status) {
+                  const v2status = v2res.data.status
+                  if (v2status === 'completed') {
+                    const svs = prog.data?.shot_videos || {}
+                    const url = svs[String(sIdx)] || svs[sIdx] || ''
+                    if (url) {
+                      this.shots[sIdx].video_url = url
+                      this.shots[sIdx].videoStatus = 'completed'
+                      this.singleGenerating = false
+                      this.shots = [...this.shots]
+                      console.log('[generateSingleVideo] 成功!', url)
+                      return
+                    }
+                  }
+                }
+              } catch (e) {}
+            }
             if (prog.success && prog.data) {
               const svs = prog.data.shot_videos || {}
               const url = svs[String(sIdx)] || svs[sIdx] || ''
@@ -1257,7 +1305,6 @@ export default {
                 console.log('[generateSingleVideo] 成功!', url)
                 return
               }
-              // 检查是否失败
               const stages = prog.data.stages || []
               const vs = stages.find(s => s.stage === 'video')
               if (vs && vs.status === 'failed' && vs.data && vs.data.generating_shot !== sIdx) {
@@ -1509,6 +1556,9 @@ export default {
           // 从 pipeline progress 加载分镜和场景图
           try {
             const prog = await apiReq('GET', '/pipeline/progress/' + id)
+            if (prog.v2_pipeline_id && prog.v2_pipeline_id !== this.v2PipelineId) {
+              this.v2PipelineId = prog.v2_pipeline_id
+            }
             if (prog.success && prog.data) {
               const stages = prog.data.stages || []
               const sb = stages.find(s => s.stage === 'storyboard')
