@@ -827,6 +827,7 @@ export default {
         }
       } catch(e) {}
     },
+  },
 }
 </script>
 
