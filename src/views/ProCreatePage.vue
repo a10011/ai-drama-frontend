@@ -818,8 +818,12 @@ export default {
             if (res.data.status === 'completed') {
               const dbres = await apiReq('GET', '/v2/pipeline/assets/' + this.v2PipelineId)
               if (dbres.success && dbres.data) {
-                const charAsset = dbres.data.find(a => a.type === 'character' || a.asset_type === 'character')
-                if (charAsset && charAsset.url) return JSON.parse(charAsset.url)
+                // director_analysis 里包含 characters
+                const dirAsset = dbres.data.find(a => a.type === 'director_analysis' || a.asset_type === 'director_analysis')
+                if (dirAsset && dirAsset.url) {
+                  const data = JSON.parse(dirAsset.url)
+                  return data.characters || data.characters || []
+                }
               }
               return null
             }
