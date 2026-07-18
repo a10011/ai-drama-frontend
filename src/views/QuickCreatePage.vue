@@ -1,6 +1,6 @@
 <template>
-  <div class="one-click-page">
-    <!-- ========== 步骤1: 选择内容类型 ========== -->
+  <div class="quick-create-page">
+    <!-- 步骤 1: 选择类型 -->
     <div v-if="step === 'select'" class="step-select fade-in">
       <div class="page-header">
         <h1>🪄 极简一键模式</h1>
@@ -14,12 +14,12 @@
           <span class="card-badge" v-if="t.badge">{{ t.badge }}</span>
         </div>
       </div>
-      <div v-if="selectedType" class="input-area" style="margin-bottom:12px">
-  <label style="display:block;margin-bottom:6px;font-size:14px;color:#ccc">剧名</label>
-  <input v-model="title" class="prompt-input" style="height:40px" placeholder="给你的短剧起个名字" maxlength="50" />
-  <div class="input-meta"><span class="char-count">{{ title.length }}/50</span></div>
-</div>
-<transition name="slide">
+      <div v-if="selectedType" class="input-area">
+        <label style="display:block;margin-bottom:6px;font-size:14px;color:#ccc">剧名</label>
+        <input v-model="title" class="prompt-input" style="height:40px" placeholder="给你的短剧起个名字" maxlength="50" />
+        <div class="input-meta"><span class="char-count">{{ title.length }}/50</span></div>
+      </div>
+      <transition name="slide">
         <div v-if="selectedType" class="input-area">
           <textarea v-model="prompt" class="prompt-input" :placeholder="promptPlaceholder" rows="3" maxlength="500"></textarea>
           <div class="input-meta">
@@ -37,7 +37,7 @@
       </transition>
     </div>
 
-    <!-- ========== 步骤2: 排队+进度 ========== -->
+    <!-- 步骤 2: 排队+进度 -->
     <div v-if="step === 'progress'" class="step-progress fade-in">
       <div class="progress-card">
         <div class="queue-info" v-if="queuePos > 0">
@@ -52,24 +52,20 @@
           <p class="status-text">{{ statusText }}</p>
           <div class="stage-list">
             <div v-for="item in stageList" :key="item.key" class="stage-row" :class="item.status">
-              <span class="si">{{ item.icon }}</span><span class="sl">{{ item.label }}</span><span class="ss">{{ statusMap[item.status] }}</span>
+              <span class="si">{{ item.icon }}</span><span class="sl">{{ item.label }}</span>
+              <span class="ss" v-if="item.status==='done'">✅</span>
+              <span class="ss spinner-sm" v-else-if="item.status==='running'">⏳</span>
             </div>
           </div>
         </div>
-        <div class="done-info" v-if="done">
-          <div class="done-icon">✅</div>
-          <p class="done-text">生成完成！</p>
-          <video v-if="videoUrl" :src="videoUrl" controls playsinline class="result-video"></video>
-          <div class="done-actions">
-            <button class="btn" @click="goHome">🏠 返回</button>
-            <button class="btn btn-primary" @click="downloadVideo">📥 下载</button>
-            <button class="btn" @click="reset">🔄 重新创作</button>
+        <div class="result-area" v-if="done">
+          <p class="result-title">🎉 生成完成！</p>
+          <video v-if="videoUrl" :src="videoUrl" controls class="result-video"></video>
+          <div class="result-actions">
+            <button class="btn-download" @click="downloadVideo">📥 下载视频</button>
+            <button class="btn-share" @click="shareVideo">📤 分享</button>
+            <button class="btn-new" @click="reset">🪄 再来一个</button>
           </div>
-        </div>
-        <div class="fail-info" v-if="failed">
-          <div class="fail-icon">❌</div>
-          <p class="fail-text">{{ errMsg }}</p>
-          <button class="btn" @click="reset">🔄 重新开始</button>
         </div>
       </div>
     </div>
@@ -77,219 +73,266 @@
 </template>
 
 <script>
-const API = '/api/v1'
-async function api(method, path, body) {
-  const t = localStorage.getItem('token')
-  const o = { method, headers: { 'Content-Type': 'application/json' } }
-  if (t) o.headers['Authorization'] = 'Bearer ' + t
-  if (body) o.body = JSON.stringify(body)
-  const r = await fetch(path, o)
-  return r.json()
-}
+import axios from 'axios'
 
 export default {
-  name: 'QuickCreatePage',
   data() {
     return {
       step: 'select',
-      selectedType: null,
-      prompt: '', title: '',
+      selectedType: '',
+      title: '',
+      prompt: '',
       submitting: false,
+      taskId: null,
       queuePos: 0,
-      overallProgress: 0,
-      projectId: '',
-      pollTimer: null,
       done: false,
-      failed: false,
-      errMsg: '',
+      overallProgress: 0,
+      statusText: '',
       videoUrl: '',
-      stageList: [],
-      statusText: '正在处理...',
-      statusMap: { pending: '⏳', running: '🔄 进行中', completed: '✅ 完成', failed: '❌ 失败' },
-      contentTypes: [
-        { key: 'ad', icon: '📺', label: '广告片', desc: '产品展示/品牌短片，15-60秒', badge: '极速' },
-        { key: 'drama', icon: '🎬', label: '剧情短片', desc: 'AI短剧/故事短片，2-5分钟', badge: '深度' },
-        { key: 'promo', icon: '📢', label: '宣传片', desc: '企业/活动宣传视频，1-3分钟', badge: '高效' },
-      ],
       recentTemplates: [],
     }
   },
   computed: {
     promptPlaceholder() {
-      const m = { ad: '输入广告主题，如：智能水杯，主打便携与科技感', drama: '输入故事梗概，如：将军与白衣女子的诀别', promo: '输入宣传目标，如：新店开业活动推广' }
-      return m[this.selectedType] || '输入你的创意...'
+      const ph = {
+        'short_drama': '输入故事创意，例如：一个社畜在深夜加班时发现自己养的绿植会说话...',
+        'ad': '输入广告产品描述，例如：一款面向年轻人的智能手表...',
+        'promo': '输入宣传片主题，例如：某科技公司新品发布会宣传片...',
+      }
+      return ph[this.selectedType] || '输入你的创意...'
     },
     ringOffset() {
-      const c = 2 * Math.PI * 52
-      return c - (Math.max(0, Math.min(100, this.overallProgress)) / 100) * c
+      const circumference = 2 * Math.PI * 52
+      return circumference - (this.overallProgress / 100) * circumference
+    },
+    stageList() {
+      return [
+        { key: 'script', label: '剧本', icon: '📝', status: this.overallProgress < 20 ? 'running' : 'done' },
+        { key: 'character', label: '角色', icon: '👤', status: this.overallProgress < 40 ? 'running' : 'done' },
+        { key: 'storyboard', label: '分镜', icon: '🎞', status: this.overallProgress < 60 ? 'running' : 'done' },
+        { key: 'video', label: '视频', icon: '🎥', status: this.overallProgress < 80 ? 'running' : 'done' },
+        { key: 'composite', label: '合成', icon: '🎬', status: this.overallProgress >= 80 ? 'running' : 'done' },
+      ]
     },
   },
   mounted() {
-    const q = this.$route.query
-    if (q.type && ['ad','drama','promo'].includes(q.type)) this.selectedType = q.type
-    if (q.prompt) this.prompt = q.prompt
-    if (q.auto) this.submitTask()
-    this.loadTemplates()
+    // 加载最近模板
+    const saved = localStorage.getItem('recent_templates')
+    if (saved) this.recentTemplates = JSON.parse(saved)
+    // URL 参数
+    const tpl = this.$route.query.template
+    if (tpl) this.prompt = decodeURIComponent(tpl)
+    const prm = this.$route.query.prompt
+    if (prm) this.prompt = decodeURIComponent(prm)
   },
-  beforeUnmount() { this.stopPoll() },
   methods: {
-    async loadTemplates() {
-      try {
-        const res = await api('GET', API + '/templates?type=' + (this.selectedType || 'drama'))
-        if (res.success && res.data) this.recentTemplates = res.data.slice(0, 5)
-      } catch(e) { this.recentTemplates = ['古风诀别', '都市甜宠', '悬疑反转'] }
-    },
     async submitTask() {
-      if (!this.prompt.trim() || this.submitting) return
       this.submitting = true
+      this.step = 'progress'
+      this.done = false
+      this.overallProgress = 0
+      this.statusText = '正在提交任务...'
+      
       try {
-        const res = await api('POST', API + '/queue/submit', {
+        const token = localStorage.getItem('token') || localStorage.getItem('guest_token')
+        const resp = await axios.post('/api/v1/quick-create', {
           type: this.selectedType,
-          prompt: this.prompt.trim(),
+          title: this.title,
+          prompt: this.prompt,
+        }, {
+          headers: { Authorization: `Bearer ${token}` },
         })
-        if (res.success) {
-          this.projectId = res.data.project_id || res.data.id || ''
-          this.queuePos = res.data.queue_position || 0
-          this.step = 'progress'
-          if (this.queuePos === 0) this.startPoll()
-          else this.pollQueue()
+        
+        if (resp.data?.success) {
+          this.taskId = resp.data.task_id
+          this.pollProgress()
         } else {
-          alert(res.error || '提交失败')
+          this.statusText = '提交失败: ' + (resp.data?.error || '未知错误')
         }
-      } catch(e) {
-        alert('提交失败: 网络错误')
+      } catch (e) {
+        this.statusText = '网络错误，请重试'
       }
+      
       this.submitting = false
     },
-    pollQueue() {
-      this.stopPoll()
-      this.pollTimer = setInterval(async () => {
-        try {
-          const res = await api('GET', API + '/queue/status/' + this.projectId)
-          if (res.success) {
-            this.queuePos = res.data.queue_position || 0
-            this.projectId = res.data.project_id || this.projectId
-            if (this.queuePos === 0) {
-              this.stopPoll()
-              this.startPoll()
-            }
-          }
-        } catch(e) {}
-      }, 3000)
-    },
-    startPoll() {
-      this.stopPoll()
-      this.pollTimer = setInterval(() => this.pollProgress(), 3000)
-      this.pollProgress()
-    },
-    stopPoll() { if (this.pollTimer) { clearInterval(this.pollTimer); this.pollTimer = null } },
+    
     async pollProgress() {
-      if (!this.projectId) return
-      try {
-        const res = await api('GET', API + '/queue/progress/' + this.projectId)
-        if (!res.success) return
-        const data = res.data || {}
-        const stages = data.stages || []
-        if (stages.length) {
-          this.stageList = stages.map(s => ({ key: s.stage, label: s.label || s.stage, icon: s.icon || '●', status: s.status || 'pending' }))
-          let ok = 0, fail = false
-          for (const s of stages) {
-            if (s.status === 'completed') ok++
-            if (s.status === 'failed') fail = true
+      const poll = async () => {
+        try {
+          const token = localStorage.getItem('token') || localStorage.getItem('guest_token')
+          const resp = await axios.get(`/api/v1/quick-create/${this.taskId}/progress`, {
+            headers: { Authorization: `Bearer ${token}` },
+          })
+          
+          const data = resp.data
+          if (data.queue_pos !== undefined) this.queuePos = data.queue_pos
+          if (data.progress !== undefined) this.overallProgress = data.progress
+          if (data.status_text) this.statusText = data.status_text
+          if (data.video_url) this.videoUrl = data.video_url
+          
+          if (data.done) {
+            this.done = true
+            // 保存模板
+            this.saveTemplate()
+          } else {
+            setTimeout(poll, 3000)
           }
-          this.overallProgress = data.finished ? 100 : Math.round((ok / Math.max(stages.length, 1)) * 100)
-          if (data.finished) { this.done = true; this.stopPoll(); if (data.video_url) this.videoUrl = data.video_url; return }
-          if (fail) { this.failed = true; this.errMsg = '有阶段失败'; this.stopPoll(); return }
+        } catch (e) {
+          setTimeout(poll, 5000)
         }
-      } catch(e) {}
+      }
+      poll()
     },
+    
+    saveTemplate() {
+      if (!this.prompt) return
+      const idx = this.recentTemplates.indexOf(this.prompt)
+      if (idx >= 0) this.recentTemplates.splice(idx, 1)
+      this.recentTemplates.unshift(this.prompt)
+      this.recentTemplates = this.recentTemplates.slice(0, 5)
+      localStorage.setItem('recent_templates', JSON.stringify(this.recentTemplates))
+    },
+    
     downloadVideo() {
-      if (this.videoUrl) { const a = document.createElement('a'); a.href = this.videoUrl; a.download = 'output.mp4'; a.click() }
+      if (this.videoUrl) window.open(this.videoUrl)
     },
-    goHome() { this.$router.push('/') },
-    reset() { this.step = 'select'; this.selectedType = null; this.prompt = ''; this.submitting = false; this.queuePos = 0; this.overallProgress = 0; this.done = false; this.failed = false; this.videoUrl = ''; this.stageList = []; this.stopPoll() },
-  }
+    
+    shareVideo() {
+      if (navigator.share && this.videoUrl) {
+        navigator.share({ title: '我的短剧', url: this.videoUrl })
+      } else if (this.videoUrl) {
+        navigator.clipboard.writeText(this.videoUrl)
+        alert('链接已复制')
+      }
+    },
+    
+    reset() {
+      this.step = 'select'
+      this.selectedType = ''
+      this.title = ''
+      this.prompt = ''
+      this.taskId = null
+      this.queuePos = 0
+      this.done = false
+      this.overallProgress = 0
+      this.statusText = ''
+      this.videoUrl = ''
+    },
+  },
 }
 </script>
 
 <style scoped>
-.one-click-page { max-width: 680px; margin: 0 auto; padding: 24px 16px; min-height: 100vh; background: var(--bg, #0f0f1a); color: #e0e0e0 }
-.fade-in { animation: fadeIn .35s ease }
-@keyframes fadeIn { from { opacity: 0; transform: translateY(12px) } to { opacity: 1; transform: translateY(0) } }
-.slide-enter-active, .slide-leave-active { transition: all .3s ease }
-.slide-enter-from, .slide-leave-to { opacity: 0; transform: translateY(10px) }
-.page-header { text-align: center; margin-bottom: 32px }
-.page-header h1 { font-size: 26px; margin: 0 0 6px }
-.subtitle { color: #999; font-size: 14px; margin: 0 }
-.card-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 24px }
-.type-card { background: #1a1a2e; border: 2px solid #2a2a4e; border-radius: 14px; padding: 20px 14px; text-align: center; cursor: pointer; transition: all .25s }
-.type-card:hover { border-color: #4a4a8e; transform: translateY(-2px) }
-.type-card.active { border-color: #6c5ce7; background: #1e1a3e; box-shadow: 0 0 20px rgba(108,92,231,.25) }
-.card-icon { font-size: 36px; display: block; margin-bottom: 8px }
-.type-card h3 { font-size: 16px; margin: 0 0 4px; color: #fff }
-.card-desc { font-size: 12px; color: #888; margin: 0; line-height: 1.4 }
-.card-badge { display: inline-block; margin-top: 8px; padding: 2px 10px; border-radius: 10px; font-size: 11px; background: #6c5ce7; color: #fff }
-.input-area { background: #1a1a2e; border-radius: 14px; padding: 16px }
-.prompt-input { width: 100%; background: #12122a; border: 1px solid #333; border-radius: 10px; padding: 12px; color: #e0e0e0; font-size: 14px; resize: none; outline: none; box-sizing: border-box }
-.prompt-input:focus { border-color: #6c5ce7 }
-.input-meta { display: flex; justify-content: space-between; align-items: center; margin-top: 10px }
-.char-count { font-size: 12px; color: #666 }
-.btn-submit { padding: 10px 28px; border: none; border-radius: 10px; background: #6c5ce7; color: #fff; font-size: 15px; cursor: pointer; transition: all .2s }
-.btn-submit:hover:not(:disabled) { background: #7c6df7; transform: translateY(-1px) }
-.btn-submit:disabled { opacity: .4; cursor: default }
-.recent-templates { margin-top: 12px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap }
-.recent-templates .label { font-size: 12px; color: #666 }
-.chip { padding: 4px 12px; border-radius: 12px; border: 1px solid #333; background: transparent; color: #aaa; font-size: 12px; cursor: pointer }
-.chip:hover { border-color: #6c5ce7; color: #fff }
-.progress-card { background: #1a1a2e; border-radius: 14px; padding: 24px; text-align: center }
-.queue-info { padding: 20px }
-.queue-icon { font-size: 40px; display: block; margin-bottom: 8px }
-.queue-text { font-size: 15px; color: #ccc }
-.status-ring { position: relative; width: 120px; height: 120px; margin: 0 auto 16px }
-.ring-bg { fill: none; stroke: #2a2a4e; stroke-width: 8 }
-.ring-fill { fill: none; stroke: #6c5ce7; stroke-width: 8; stroke-dasharray: 326.7; stroke-linecap: round; transform: rotate(-90deg); transform-origin: center; transition: stroke-dashoffset .5s }
-.ring-center { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center }
-.ring-pct { font-size: 22px; font-weight: 700; color: #fff }
-.status-text { font-size: 14px; color: #999; margin-bottom: 16px }
-.stage-list { text-align: left; max-height: 240px; overflow-y: auto }
-.stage-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 13px }
-.stage-row.completed { color: #4ade80 }
-.stage-row.running { color: #60a5fa }
-.stage-row.failed { color: #f87171 }
-.stage-row.pending { color: #666 }
-.si { font-size: 14px; width: 20px }
-.sl { flex: 1 }
-.ss { font-size: 12px }
-.done-icon, .fail-icon { font-size: 48px; margin-bottom: 8px }
-.done-text { font-size: 18px; color: #4ade80; margin: 0 0 12px }
-.fail-text { font-size: 14px; color: #f87171; margin: 0 0 12px }
-.result-video { width: 100%; max-height: 400px; border-radius: 10px; margin-bottom: 12px }
-.done-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap }
-.btn { padding: 10px 20px; border: 1px solid #333; border-radius: 10px; background: transparent; color: #ccc; font-size: 14px; cursor: pointer }
-.btn-primary { background: #6c5ce7; border-color: #6c5ce7; color: #fff }
-
-@media (max-width: 768px) {
-  .one-click-page { padding: 16px 12px 72px; }
-  .page-header h1 { font-size: 22px; }
-  .card-grid { grid-template-columns: 1fr; gap: 10px; }
-  .type-card { padding: 16px; display: flex; align-items: center; gap: 12px; text-align: left; }
-  .card-icon { font-size: 28px; margin-bottom: 0; flex-shrink: 0; }
-  .type-card h3 { font-size: 15px; margin-bottom: 2px; }
-  .card-desc { font-size: 11px; }
-  .card-badge { margin-top: 0; }
-  .prompt-input { font-size: 14px; padding: 10px; }
-  .btn-submit { width: 100%; padding: 12px; }
-  .input-meta { flex-direction: column; gap: 8px; }
-  .progress-card { padding: 16px; }
-  .result-video { max-height: 250px; }
-  .done-actions { flex-direction: column; }
-  .done-actions .btn { width: 100%; }
-  .stage-list { max-height: 180px; }
+.quick-create-page {
+  min-height: 100vh;
+  background: var(--bg-primary, #0a0a0f);
+  color: var(--text-primary, #f0f0f5);
+  font-family: 'Inter', 'Noto Sans SC', -apple-system, sans-serif;
+  padding: 40px 20px;
 }
 
-/* ===== Mobile Responsive ===== */
-@media (max-width: 768px) {
-  .main-content { padding-bottom: 72px !important; }
+.page-header { text-align: center; margin-bottom: 40px; }
+.page-header h1 { font-size: 32px; font-weight: 800; margin-bottom: 8px; }
+.subtitle { font-size: 16px; color: var(--text-secondary, #a0a0b8); }
+
+.card-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px; max-width: 800px; margin: 0 auto 32px;
+}
+.type-card {
+  padding: 24px 16px; background: var(--bg-card, #1a1a2e);
+  border: 2px solid var(--border, rgba(255,255,255,0.06));
+  border-radius: 16px; text-align: center; cursor: pointer;
+  transition: all 0.3s; position: relative;
+}
+.type-card:hover { border-color: var(--accent, #6366f1); transform: translateY(-2px); }
+.type-card.active { border-color: var(--accent, #6366f1); background: rgba(99,102,241,0.1); }
+.card-icon { font-size: 40px; display: block; margin-bottom: 12px; }
+.type-card h3 { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
+.card-desc { font-size: 12px; color: var(--text-muted, #6b6b80); margin-bottom: 8px; }
+.card-badge {
+  position: absolute; top: 12px; right: 12px; padding: 2px 8px;
+  background: var(--accent, #6366f1); color: #fff; border-radius: 10px;
+  font-size: 10px; font-weight: 600;
 }
 
+.input-area { max-width: 600px; margin: 0 auto 24px; }
+.prompt-input {
+  width: 100%; padding: 12px 16px; background: var(--bg-input, #16162a);
+  border: 1px solid var(--border, rgba(255,255,255,0.06));
+  border-radius: 12px; color: var(--text-primary, #f0f0f5);
+  font-size: 14px; outline: none; resize: vertical; font-family: inherit;
+}
+.prompt-input:focus { border-color: var(--accent, #6366f1); }
+.input-meta { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
+.char-count { font-size: 12px; color: var(--text-muted, #6b6b80); }
+.btn-submit {
+  padding: 10px 24px; background: linear-gradient(135deg, #c49b4a, #d4b35a);
+  color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 700;
+  cursor: pointer; transition: all 0.2s;
+}
+.btn-submit:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(196,155,74,0.3); }
+.btn-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.recent-templates { margin-top: 16px; }
+.recent-templates .label { font-size: 12px; color: var(--text-muted, #6b6b80); margin-right: 8px; }
+.chip {
+  padding: 4px 12px; background: var(--bg-hover, rgba(255,255,255,0.04));
+  border: 1px solid var(--border, rgba(255,255,255,0.06));
+  border-radius: 16px; color: var(--text-secondary, #a0a0b8);
+  font-size: 12px; cursor: pointer; margin-right: 6px; margin-bottom: 6px;
+  transition: all 0.2s;
+}
+.chip:hover { background: var(--bg-active, rgba(255,255,255,0.08)); color: var(--text-primary, #f0f0f5); }
+
+/* Progress */
+.progress-card {
+  max-width: 500px; margin: 0 auto; padding: 40px 24px;
+  background: var(--bg-card, #1a1a2e); border: 1px solid var(--border, rgba(255,255,255,0.06));
+  border-radius: 20px; text-align: center;
+}
+.queue-info { margin-bottom: 24px; }
+.queue-icon { font-size: 24px; }
+.queue-text { font-size: 14px; color: var(--text-secondary, #a0a0b8); margin-top: 8px; }
+.queue-text strong { color: var(--accent, #6366f1); }
+
+.status-ring { position: relative; width: 120px; height: 120px; margin: 0 auto 20px; }
+.ring-bg { fill: none; stroke: var(--bg-hover, rgba(255,255,255,0.04)); stroke-width: 6; }
+.ring-fill { fill: none; stroke: var(--accent, #6366f1); stroke-width: 6; stroke-linecap: round; transform: rotate(-90deg); transform-origin: center; transition: stroke-dashoffset 0.5s; }
+.ring-center { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 700; }
+.status-text { font-size: 14px; color: var(--text-secondary, #a0a0b8); margin-bottom: 20px; }
+
+.stage-list { display: flex; flex-direction: column; gap: 8px; text-align: left; }
+.stage-row { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 6px 12px; border-radius: 8px; }
+.stage-row.running { background: rgba(99,102,241,0.1); color: var(--accent, #6366f1); }
+.stage-row.done { color: var(--success, #34d399); }
+.si { font-size: 16px; }
+.ss { margin-left: auto; font-size: 14px; }
+.spinner-sm { width: 14px; height: 14px; border: 2px solid rgba(99,102,241,0.3); border-top-color: var(--accent, #6366f1); border-radius: 50%; animation: spin 0.8s linear infinite; display: inline-block; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.result-area { margin-top: 24px; }
+.result-title { font-size: 20px; font-weight: 700; margin-bottom: 16px; color: var(--success, #34d399); }
+.result-video { width: 100%; max-width: 480px; border-radius: 12px; margin-bottom: 16px; }
+.result-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+.btn-download, .btn-share, .btn-new {
+  padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 600;
+  cursor: pointer; border: none; transition: all 0.2s;
+}
+.btn-download { background: var(--accent, #6366f1); color: #fff; }
+.btn-share { background: var(--bg-hover, rgba(255,255,255,0.04)); color: var(--text-secondary, #a0a0b8); border: 1px solid var(--border, rgba(255,255,255,0.06)); }
+.btn-new { background: linear-gradient(135deg, #c49b4a, #d4b35a); color: #fff; }
+.btn-download:hover, .btn-new:hover { transform: translateY(-1px); }
+
+.fade-in { animation: fadeIn 0.3s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+.slide-enter-active { transition: all 0.3s ease; }
+.slide-leave-active { transition: all 0.2s ease; }
+.slide-enter-from { opacity: 0; transform: translateY(20px); }
+.slide-leave-to { opacity: 0; transform: translateY(-10px); }
+
+@media (max-width: 768px) {
+  .card-grid { grid-template-columns: 1fr; }
+  .result-actions { flex-direction: column; }
+}
 </style>

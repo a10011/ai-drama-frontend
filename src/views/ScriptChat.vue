@@ -1,6 +1,6 @@
 <template>
   <div class="script-chat">
-    <!-- 侧边栏：历史会话 -->
+    <!-- 侧边栏 -->
     <aside class="sidebar" :class="{ collapsed: sidebarCollapsed }">
       <div class="sidebar-header">
         <button class="btn-new-chat" @click="newChat">✏️ 新建剧本</button>
@@ -44,280 +44,156 @@
         </div>
       </header>
 
-      <!-- Tab 切换：灵感创作 / 小说改编 -->
+      <!-- Tab 切换 -->
       <div class="mode-tabs">
         <button class="mode-tab" :class="{ active: activeTab === 'create' }" @click="activeTab = 'create'">💡 灵感创作</button>
         <button class="mode-tab" :class="{ active: activeTab === 'adapt' }" @click="activeTab = 'adapt'">📖 小说改编</button>
       </div>
 
-      <!-- ====== 灵感创作模式（原有聊天界面） ====== -->
+      <!-- ====== 灵感创作模式 ====== -->
       <div v-if="activeTab === 'create'" class="tab-content">
+        <!-- 消息列表 -->
+        <div class="message-list" ref="messageList">
+          <!-- 欢迎消息 -->
+          <div v-if="messages.length === 0" class="welcome">
+            <div class="welcome-icon">📝</div>
+            <h2 class="welcome-title">开始创作你的剧本</h2>
+            <p class="welcome-desc">描述你的故事创意，AI编剧团队将为你打造完整剧本</p>
+            <div class="welcome-templates">
+              <div
+                v-for="tpl in templates"
+                :key="tpl.title"
+                class="template-card"
+                @click="useTemplate(tpl)"
+              >
+                <span class="tpl-emoji">{{ tpl.emoji }}</span>
+                <div class="tpl-info">
+                  <div class="tpl-title">{{ tpl.title }}</div>
+                  <div class="tpl-desc">{{ tpl.desc }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
 
+          <!-- 消息列表 -->
+          <div v-for="(msg, i) in messages" :key="i" class="message" :class="msg.role">
+            <div class="message-avatar">
+              <span v-if="msg.role === 'user'">👤</span>
+              <span v-else>🤖</span>
+            </div>
+            <div class="message-bubble">
+              <div class="message-content" v-html="msg.role === 'assistant' ? renderMarkdown(msg.content) : msg.content"></div>
+              <div class="message-actions" v-if="msg.role === 'assistant' && messages.length > 1">
+                <button class="action-btn" @click="quickAction('rewrite', i)">🔄 重写</button>
+                <button class="action-btn" @click="quickAction('shorten', i)">📏 缩短</button>
+                <button class="action-btn" @click="quickAction('expand', i)">📐 扩写</button>
+                <button class="action-btn" @click="quickAction('change_style', i)">🎭 改风格</button>
+                <button class="action-btn" @click="quickAction('export', i)">📥 导出</button>
+              </div>
+            </div>
+          </div>
 
-      <!-- 消息列表 -->
-      <div class="message-list" ref="messageList">
-        <!-- 欢迎消息 -->
-        <div v-if="messages.length === 0" class="welcome">
-          <div class="welcome-icon">📝</div>
-          <h2 class="welcome-title">开始创作你的剧本</h2>
-          <p class="welcome-desc">描述你的故事创意，AI编剧团队将为你打造完整剧本</p>
-          <div class="welcome-templates">
-            <div
-              v-for="tpl in templates"
-              :key="tpl.title"
-              class="template-card"
-              @click="useTemplate(tpl)"
-            >
-              <span class="tpl-emoji">{{ tpl.emoji }}</span>
-              <div class="tpl-info">
-                <div class="tpl-title">{{ tpl.title }}</div>
-                <div class="tpl-desc">{{ tpl.desc }}</div>
+          <!-- 流式输出指示器 -->
+          <div v-if="streaming" class="message assistant streaming">
+            <div class="message-avatar">🤖</div>
+            <div class="message-bubble">
+              <div class="streaming-indicator">
+                <span>正在思考...</span>
+                <span class="dot">.</span><span class="dot">.</span><span class="dot">.</span>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- 对话消息 -->
-        <div
-          v-for="(msg, i) in messages"
-          :key="i"
-          class="message"
-          :class="[msg.role, msg.type === 'script' ? 'script-message' : '', msg.type === 'modified_script' ? 'modified-msg' : '']"
-        >
-          <div class="msg-avatar">{{ msg.role === 'user' ? '👤' : (msg.type === 'modified_script' ? '✏️' : '🤖') }}</div>
-          <div class="msg-content">
-            <div class="msg-role-label">
-              {{ msg.type === 'modified_script' ? `人工修改版 v${msg.version}` : (msg.role === 'user' ? '你' : '剧本智能体') }}
-              <span v-if="msg.timestamp" class="msg-timestamp">{{ msg.timestamp.slice(11,19) }}</span>
+        <!-- 输入区域 -->
+        <div class="input-area">
+          <!-- 进度条 -->
+          <div class="progress-bar" v-if="streaming">
+            <div class="progress-track">
+              <div class="progress-fill" :style="{ width: progressPct + '%' }"></div>
             </div>
-            <div v-if="msg.type === 'script' && !editMode" class="script-content">
-              <div class="script-actions">
-                <button class="btn-sm" @click="startEdit(i)">✏️ 人工修改</button>
-                                <button class="btn-sm btn-outline" @click="confirmOutline()">✅ 确认大纲</button>
-                <button class="btn-sm" @click="showCertificate()">📜 版权证明</button>
-                <button class="btn-sm" @click="toggleModHistory()">📋 修改记录{{ modifications.length ? `(${modifications.length})` : '' }}</button>
-                <button class="btn-sm" @click="exportScript()">📥 导出</button>
-              </div>
-              <div v-html="renderMarkdown(msg.content)" class="markdown-body"></div>
-            </div>
-            <div v-else-if="msg.type === 'modified_script' && !editMode" class="script-content modified-content">
-              <div class="modified-badge">✅ 第{{ msg.version }}版 人工确认修改 · {{ msg.timestamp }}</div>
-              <div v-html="renderMarkdown(msg.content)" class="markdown-body"></div>
-            </div>
-            <div v-else-if="msg.type === 'modification'" class="text-content modification-note">📝 {{ msg.content }}</div>
-            <div v-else-if="msg.type !== 'script' && msg.type !== 'modified_script' && msg.type !== 'modification'" class="text-content">{{ msg.content }}</div>
-            <div v-if="msg.loading" class="typing-indicator">
-              <span></span><span></span><span></span>
-            </div>
+            <div class="progress-text">{{ progressMsg }}</div>
           </div>
-        </div>
 
-        <!-- 编辑面板 -->
-        <div v-if="editMode" class="edit-panel">
-          <div class="edit-header">
-            <span class="edit-title">✏️ 人工修改剧本</span>
-            <button class="btn-sm btn-cancel" @click="cancelEdit">取消</button>
-          </div>
-          <div class="edit-info">
-            修改 AI 生成的剧本内容，提交后将自动保存带时间戳的修改记录，作为原创版权证明。
-          </div>
-          <textarea v-model="editContent" class="edit-textarea" rows="15"></textarea>
-          <div class="edit-notes-row">
-            <input v-model="editNotes" class="edit-notes-input" placeholder="修改说明（如：调整了角色对话、优化了剧情节奏等）" />
-            <button class="btn-submit-mod" @click="submitModification" :disabled="!editContent.trim() || submitting">
-              {{ submitting ? '⏳ 保存中...' : '📝 提交修改确认（带时间戳）' }}
+          <div class="input-wrapper">
+            <textarea
+              v-model="userInput"
+              class="input-textarea"
+              placeholder="描述你的故事创意，例如：一个社畜在深夜加班时发现自己养的绿植会说话..."
+              rows="3"
+              @keydown.ctrl.enter="sendMessage"
+              @keydown.meta.enter="sendMessage"
+            ></textarea>
+            <button class="send-btn" @click="sendMessage" :disabled="!userInput.trim() || streaming">
+              <span v-if="streaming" class="spinner"></span>
+              <span v-else>➤</span>
             </button>
           </div>
+          <div class="input-hint">Ctrl+Enter 发送 · 支持 Markdown 格式</div>
         </div>
+      </div>
 
-        <!-- 修改记录面板 -->
-        <div v-if="showModHistory" class="mod-history-panel">
-          <div class="mod-history-header">
-            <span>📋 修改记录（共 {{ modifications.length }} 版）</span>
-            <button class="btn-sm btn-cancel" @click="showModHistory = false">关闭</button>
+      <!-- ====== 小说改编模式 ====== -->
+      <div v-if="activeTab === 'adapt'" class="tab-content">
+        <div class="adapt-container">
+          <div class="adapt-header">
+            <h2>📖 小说改编剧本</h2>
+            <p class="adapt-desc">粘贴你的小说内容，AI 将自动改编为短剧剧本</p>
           </div>
-          <div v-if="modifications.length === 0" class="mod-empty">
-            暂无人工修改记录
+          <div class="adapt-input">
+            <textarea
+              v-model="adaptScript"
+              class="adapt-textarea"
+              placeholder="粘贴你的小说内容到这里..."
+              rows="10"
+            ></textarea>
+            <button class="adapt-submit-btn" @click="adaptScriptContent" :disabled="adaptLoading || !adaptScript.trim()">
+              <span v-if="adaptLoading" class="spinner"></span>
+              <span v-else>🔄 开始改编</span>
+            </button>
           </div>
-          <div v-for="(mod, i) in modifications" :key="i" class="mod-item">
-            <div class="mod-version">v{{ mod.version }}</div>
-            <div class="mod-info">
-              <div class="mod-time">{{ mod.created_at }}</div>
-              <div class="mod-diff">{{ mod.diff_summary }}</div>
-              <div v-if="mod.editor_notes" class="mod-notes">📌 {{ mod.editor_notes }}</div>
+          <div class="adapt-result" v-if="adaptResult">
+            <div class="adapt-analysis-box">
+              <h3>📊 改编分析</h3>
+              <div class="adapt-analysis-text" v-html="renderMarkdown(adaptResult.analysis)"></div>
             </div>
-            <div class="mod-hash">
-              <code>{{ (mod.modified_content || '').hashCode ? 'SHA256:' + String(mod.modified_content).hashCode()?.toString(16).slice(0,8) : '…' }}</code>
+            <div class="adapt-char-insights" v-if="adaptResult.characters">
+              <h4>🎭 角色洞察</h4>
+              <div class="adapt-char-card" v-for="char in adaptResult.characters" :key="char.name">
+                <strong>{{ char.name }}</strong> - {{ char.role }}
+                <div class="adapt-char-meta">{{ char.description }}</div>
+              </div>
             </div>
-          </div>
-        </div>
-
-        <!-- 版权证明面板 -->
-        <div v-if="showCert" class="cert-panel">
-          <div class="cert-panel-header">
-            <span>📜 原创剧本版权证明</span>
-            <button class="btn-sm btn-cancel" @click="showCert = false">关闭</button>
-          </div>
-          <div v-if="certLoading" class="cert-loading">加载中...</div>
-          <div v-else-if="certData" class="cert-content">
-            <div class="cert-title-row">
-              <strong>{{ certData.title || '未命名剧本' }}</strong>
-              <span class="cert-time">{{ certData.generated_at }}</span>
-            </div>
-            <div class="cert-section">
-              <div class="cert-section-title">📡 证据链</div>
-              <div class="cert-row"><span class="cert-label">AI原始生成</span><code>{{ certData.evidence_chain?.['1_AI原始生成']?.content_hash || '—' }}</code></div>
-              <div class="cert-row"><span class="cert-label">修改版本数</span><span>{{ certData.evidence_chain?.['2_人工修改记录']?.total_versions || 0 }}</span></div>
-              <div class="cert-row"><span class="cert-label">最终定稿</span><code>{{ certData.evidence_chain?.['3_最终定稿']?.content_hash || '—' }}</code></div>
-            </div>
-            <div class="cert-section">
-              <div class="cert-section-title">⚖️ 法律声明</div>
-              <p class="cert-decl">{{ certData.legal_declaration?.declaration || '' }}</p>
-              <div class="cert-row"><span class="cert-label">创作平台</span><span>{{ certData.legal_declaration?.generation_platform || '' }}</span></div>
-              <div class="cert-row"><span class="cert-label">生成模型</span><span>{{ certData.legal_declaration?.generation_model || '' }}</span></div>
+            <div class="adapt-structure-box" v-if="adaptResult.structure">
+              <h4>📐 故事结构</h4>
+              <p v-html="renderMarkdown(adaptResult.structure)"></p>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- 设置面板（原样保留） -->
-      <div v-if="showSettings" class="settings-panel">
-        <div class="settings-inner">
-          <h3>写作设置</h3>
-          <div class="setting-row">
-            <label>模式</label>
-            <select v-model="chatMode">
-              <option value="precise">精编 — 串行逐个Agent，质量最高</option>
-              <option value="fast">快速 — 并行执行，效率优先</option>
+      <!-- 设置弹窗 -->
+      <div class="settings-overlay" v-if="showSettings" @click.self="showSettings = false">
+        <div class="settings-panel">
+          <h3>⚙️ 设置</h3>
+          <div class="setting-item">
+            <label>写作模型</label>
+            <select v-model="writeModel">
+              <option value="deepseek-v4-flash">DeepSeek V4 (快速)</option>
+              <option value="deepseek-reasoner">DeepSeek R1 (深度)</option>
             </select>
           </div>
-          <div class="setting-row">
-            <label>写作风格</label>
-            <select v-model="styleHint">
-              <option value="">智能匹配</option>
-              <option value="轻松搞笑">轻松搞笑</option>
-              <option value="暗黑深沉">暗黑深沉</option>
-              <option value="甜宠温馨">甜宠温馨</option>
-              <option value="热血激昂">热血激昂</option>
-              <option value="悬疑烧脑">悬疑烧脑</option>
-            </select>
+          <div class="setting-item">
+            <label>场景数量</label>
+            <input type="number" v-model.number="sceneCount" min="1" max="20" />
           </div>
-          <div class="setting-row">
-            <label>脚本段数</label>
-            <select v-model="sceneCount">
-              <option value="5">5场（短剧）</option>
-              <option value="8">8场（标准）</option>
-              <option value="12">12场（长篇）</option>
-            </select>
+          <div class="setting-item">
+            <label>风格提示</label>
+            <textarea v-model="styleHint" rows="3" placeholder="例如：轻松幽默、暗黑悬疑、温暖治愈"></textarea>
           </div>
           <button class="btn-close-settings" @click="showSettings = false">关闭</button>
         </div>
       </div>
-
-            <div v-if="streaming" class="stream-progress">
-        <div class="stream-progress-bar">
-          <div class="stream-progress-fill" :style="{ width: progressPct + '%' }"></div>
-        </div>
-        <div class="stream-progress-text">{{ progressMsg }}</div>
-      </div>
-      <!-- 输入区域 -->
-      <div class="input-area">
-        <div class="input-wrapper">
-          <textarea
-            ref="inputBox"
-            v-model="userInput"
-            class="chat-input"
-            placeholder="描述你的故事创意… 比如：写一个仙侠剧，废柴少女获得上古剑灵传承..."
-            rows="1"
-            @keydown.enter.exact="sendMessage"
-            @input="autoResize"
-          ></textarea>
-          <button
-            class="btn-send"
-            :disabled="!userInput.trim() || isLoading"
-            @click="sendMessage"
-          >
-            {{ isLoading ? '⏳' : '➤' }}
-          </button>
-        </div>
-        <div class="quick-actions">
-          <span
-            v-for="action in quickActions"
-            :key="action.label"
-            class="quick-action-tag"
-            @click="applyQuickAction(action)"
-          >
-            {{ action.label }}
-          </span>
-        </div>
-        </div>
-      </div><!-- end create tab -->
-
-      <!-- ====== 小说改编模式 ====== -->
-      <div v-if="activeTab === 'adapt'" class="adapt-panel">
-        <div class="adapt-header">
-          <h2>📖 上传完整剧本</h2>
-          <p>粘贴你的小说/剧本原文，AI导演将逐字精读，提取所有角色并分析结构</p>
-        </div>
-        <textarea
-          v-model="adaptScript"
-          class="adapt-textarea"
-          placeholder="在此粘贴完整剧本...
-支持格式：
-角色名：台词
-或 【场景描述】
-或 叙述体小说
-
-示例：
-林峰坐在破旧出租屋里，看着手机上的外卖订单。
-母亲躺在床上咳嗽：小峰，别太累了。
-林峰：妈，没事，我今天多跑几单。
-..."
-          rows="15"
-        ></textarea>
-        <div class="adapt-actions">
-          <label class="adapt-upload-btn">
-            📁 上传文件（.txt）
-            <input type="file" accept=".txt" @change="handleFileUpload" style="display:none" />
-          </label>
-          <button
-            class="adapt-submit-btn"
-            :disabled="!adaptScript.trim() || adaptLoading"
-            @click="submitAdaptScript"
-          >
-            {{ adaptLoading ? '⏳ 导演分析中...' : '🎬 提交给导演分析' }}
-          </button>
-          <button class="adapt-clear-btn" @click="adaptScript = ''" v-if="adaptScript">清空</button>
-        </div>
-        <!-- 分析结果 -->
-        <div v-if="adaptResult" class="adapt-result">
-          <div v-if="adaptResult.deep_analysis" class="adapt-analysis-box">
-            <h3>🎬 导演深度分析</h3>
-            <p class="adapt-analysis-text">{{ adaptResult.deep_analysis }}</p>
-            <div v-if="adaptResult.character_insights" class="adapt-char-insights">
-              <h4>角色解读 ({{ adaptResult.character_insights.length }}人)</h4>
-              <div v-for="c in adaptResult.character_insights" :key="c.name" class="adapt-char-card">
-                <strong>{{ c.name }}</strong> ({{ c.role }}) — {{ c.personality_read }}
-                <div class="adapt-char-meta">动机: {{ c.motivation }} | 建议: {{ c.arc_suggestion }}</div>
-              </div>
-            </div>
-          </div>
-          <div v-if="adaptResult.structure_review" class="adapt-structure-box">
-            <h4>📐 结构评估</h4>
-            <p>开场: {{ adaptResult.structure_review.opening }}</p>
-            <p>冲突: {{ adaptResult.structure_review.conflict }}</p>
-            <p>高潮: {{ adaptResult.structure_review.climax }}</p>
-            <p>收尾: {{ adaptResult.structure_review.ending }}</p>
-          </div>
-          <div v-if="adaptResult.strengths" class="adapt-list-box">
-            <h4>✅ 亮点</h4><ul><li v-for="s in adaptResult.strengths" :key="s">{{ s }}</li></ul>
-          </div>
-          <div v-if="adaptResult.improvements" class="adapt-list-box">
-            <h4>🔧 改进建议</h4><ul><li v-for="s in adaptResult.improvements" :key="s">{{ s }}</li></ul>
-          </div>
-        </div>
-      </div>
-
     </main>
   </div>
 </template>
@@ -327,6 +203,12 @@ import axios from 'axios'
 import { marked } from 'marked'
 
 const API_BASE = '/api/v1/script-wf'
+
+// 配置 marked
+marked.setOptions({
+  breaks: true,
+  gfm: true,
+})
 
 export default {
   name: 'ScriptChat',
@@ -343,12 +225,12 @@ export default {
       currentId: null,
       conversations: [],
       messages: [],
-      // ── 小说改编模式 ──
+      // 小说改编模式
       activeTab: 'create',
       adaptScript: '',
       adaptLoading: false,
       adaptResult: null,
-      // ── 模板 ──
+      // 模板
       templates: [
         { emoji: '⚔️', title: '仙侠·废柴逆袭', desc: '废柴少女获得剑灵传承，踏上修仙之路', genre: '仙侠', synopsis: '灵溪镇少女苏晚，天生废脉无法修炼。一次意外坠入上古秘境，获得远古剑灵认可。从此踏上逆天修行之路，却在登顶之时发现自己的身世藏着更大的秘密……' },
         { emoji: '🏙️', title: '都市·甜宠', desc: '霸道总裁遇上职场菜鸟，不打不相识', genre: '甜宠', synopsis: '职场新人苏小暖第一天上班就撞翻了总裁的咖啡。总裁林深腹黑毒舌却暗中帮助她成长，两人从针锋相对到暗生情愫……' },
@@ -357,31 +239,11 @@ export default {
         { emoji: '🏮', title: '古装·权谋', desc: '庶女重生，步步为营夺回属于自己的一切', genre: '古装', synopsis: '丞相庶女沈清颜被嫡姐陷害而死，一朝重生回到十五岁。这一次她步步为营，智斗嫡母，识破阴谋，最终成为这天下最尊贵的女人……' },
         { emoji: '😎', title: '逆袭·战神归来', desc: '退役特种兵回归都市，扮猪吃虎', genre: '逆袭', synopsis: '隐退的佣兵之王陈锋回到都市，本想平静生活，却接连遭遇各路挑衅。他以保安身份隐藏实力，在关键时刻一鸣惊人……' },
       ],
-      quickActions: [
-        { label: '🔄 重写', action: 'rewrite' },
-        { label: '📏 缩短', action: 'shorten' },
-        { label: '📐 扩写', action: 'expand' },
-        { label: '🎭 改风格', action: 'change_style' },
-        { label: '📥 导出', action: 'export' },
-        { label: '🗑️ 清空', action: 'clear' },
-      ],
-      // 修改记录
-      editMode: false,
-      editMsgIndex: -1,
-      editContent: '',
-      editNotes: '',
-      submitting: false,
-      modifications: [],
-      showModHistory: false,
-      // 版权证明
-      showCert: false,
-      outlineConfirmed: false,
-      certLoading: false,
-      certData: null,
+      // 流式输出
       streaming: false,
-      progressStage: "",
+      progressStage: '',
       progressPct: 0,
-      progressMsg: "",
+      progressMsg: '',
     }
   },
   computed: {
@@ -393,6 +255,16 @@ export default {
     this.loadConversations()
   },
   methods: {
+    // 渲染 Markdown
+    renderMarkdown(text) {
+      if (!text) return ''
+      try {
+        return marked.parse(text)
+      } catch (e) {
+        return text
+      }
+    },
+
     async loadConversations() {
       try {
         const token = localStorage.getItem('token')
@@ -404,408 +276,191 @@ export default {
         }
       } catch (e) {}
     },
+
     newChat() {
       this.messages = []
       this.currentId = null
       this.userInput = ''
       this.resetPanels()
-      this.$nextTick(() => this.$refs.inputBox?.focus())
     },
-    resetPanels() {
-      this.editMode = false
-      this.showModHistory = false
-      this.showCert = false
-    },
-    switchConversation(id) {
-      this.currentId = id
-      this.resetPanels()
-      this.loadMessages(id)
-      this.loadModifications(id)
-    },
-    async loadMessages(convId) {
+
+    async switchConversation(id) {
       try {
         const token = localStorage.getItem('token')
-        const resp = await axios.get(`${API_BASE}/conversations/${convId}`, {
+        const resp = await axios.get(`${API_BASE}/conversations/${id}`, {
           headers: { Authorization: `Bearer ${token}` }
         })
         if (resp.data?.success) {
-          this.messages = resp.data.data?.messages || []
+          this.currentId = id
+          this.messages = resp.data.data.messages || []
+          this.userInput = ''
         }
-      } catch (e) { console.error('Failed to load messages', e) }
-    },
-    async loadModifications(convId) {
-      try {
-        const token = localStorage.getItem('token')
-        const resp = await axios.get(`${API_BASE}/modify/${convId}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-        if (resp.data?.success) {
-          this.modifications = resp.data.data || []
-        }
-      } catch (e) { this.modifications = [] }
+      } catch (e) {}
     },
 
     async sendMessage() {
-      const text = this.userInput.trim()
-      if (!text || this.isLoading) return
+      if (!this.userInput.trim() || this.streaming) return
+      
+      const message = this.userInput.trim()
       this.userInput = ''
-      this.resetTextarea()
-      this.resetPanels()
-
-      this.messages.push({ role: 'user', content: text, type: 'text' })
-      this.isLoading = true
+      this.messages.push({ role: 'user', content: message })
       this.streaming = true
-      this.progressStage = 'start'
       this.progressPct = 0
-      this.progressMsg = 'Starting...'
-      this.scrollToBottom()
-
-      const loadingIdx = this.messages.length
-      this.messages.push({ role: 'assistant', content: 'Starting...', type: 'text', loading: true })
-
+      this.progressMsg = '正在分析创意...'
+      
       try {
         const token = localStorage.getItem('token')
-
-        const response = await fetch(`${API_BASE}/chat/stream`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            session_id: this.currentId,
-            message: text,
-            mode: this.chatMode,
-            model: this.writeModel,
-            style_hint: this.styleHint,
-            scene_count: this.sceneCount,
-          })
+        const resp = await axios.post(`${API_BASE}/chat/stream`, {
+          message,
+          session_id: this.currentId,
+          mode: this.chatMode,
+          model: this.writeModel,
+          style_hint: this.styleHint,
+          scene_count: this.sceneCount,
+        }, {
+          headers: { Authorization: `Bearer ${token}` },
+          responseType: 'stream',
         })
 
-        if (!response.ok) throw new Error('HTTP ' + response.status)
-
-        const reader = response.body.getReader()
+        const reader = resp.data.getReader()
         const decoder = new TextDecoder()
-        let buf = ''
-        let accumulatedData = null
+        let buffer = ''
+        let assistantMsg = ''
 
         while (true) {
           const { done, value } = await reader.read()
           if (done) break
-          buf += decoder.decode(value, { stream: true })
-          const events = this.parseSSE(buf)
-          const lastNl = buf.lastIndexOf('\n\n')
-          buf = lastNl >= 0 ? buf.slice(lastNl + 2) : ''
-          for (const evt of events) {
-            if (evt.event === 'progress') {
-              this.progressStage = evt.parsed.stage
-              this.progressPct = evt.parsed.pct
-              this.progressMsg = evt.parsed.message
-              this.messages[loadingIdx].content = evt.parsed.message + ' (' + evt.parsed.pct + '%)'
-              this.scrollToBottom()
-            } else if (evt.event === 'script') {
-              accumulatedData = evt.parsed
-            } else if (evt.event === 'error') {
-              throw new Error(evt.parsed.message || 'Generation failed')
+
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split('\n')
+          buffer = lines.pop() || ''
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(line.slice(6))
+                
+                if (data.event === 'progress') {
+                  this.progressStage = data.stage
+                  this.progressPct = data.pct
+                  this.progressMsg = data.message
+                } else if (data.event === 'outline') {
+                  this.progressMsg = '大纲生成完成'
+                } else if (data.event === 'characters') {
+                  this.progressMsg = '角色设计完成'
+                } else if (data.event === 'scenes') {
+                  this.progressMsg = '场景设计完成'
+                } else if (data.event === 'script') {
+                  assistantMsg = data.data.content || ''
+                  this.messages.push({ role: 'assistant', content: assistantMsg })
+                  this.currentId = data.data.session_id
+                  this.streaming = false
+                } else if (data.event === 'error') {
+                  this.messages.push({ role: 'assistant', content: '❌ ' + data.message })
+                  this.streaming = false
+                } else if (data.event === 'complete') {
+                  this.streaming = false
+                }
+              } catch (e) {}
             }
           }
         }
-
-        this.messages.splice(loadingIdx, 1)
-        if (accumulatedData && accumulatedData.success) {
-          const script = accumulatedData.script || accumulatedData.content || ''
-          this.messages.push({ role: 'assistant', content: script, type: 'script' })
-          this.currentId = accumulatedData.session_id || this.currentId
-          this.loadConversations()
-          if (this.currentId) this.loadModifications(this.currentId)
-          return
-        }
-        // Streaming did not produce script - fallback to non-streaming
-        try {
-          const token = localStorage.getItem('token')
-          const fbResp = await axios.post(
-            API_BASE + '/chat',
-            {
-              session_id: this.currentId,
-              message: text,
-              mode: this.chatMode,
-              model: this.writeModel,
-              style_hint: this.styleHint,
-              scene_count: this.sceneCount,
-            },
-            { headers: { Authorization: 'Bearer ' + token }, timeout: 300000 }
-          )
-          this.messages.splice(loadingIdx, 1)
-          if (fbResp.data?.success) {
-            const script = fbResp.data.data?.script || fbResp.data.data?.content || JSON.stringify(fbResp.data.data)
-            this.messages.push({ role: 'assistant', content: script, type: 'script' })
-            this.currentId = fbResp.data.data?.session_id || this.currentId
-            this.loadConversations()
-            if (this.currentId) this.loadModifications(this.currentId)
-          } else {
-            this.messages.push({ role: 'assistant', content: '❌ 生成失败：' + (fbResp.data?.error || '未知错误'), type: 'text' })
-          }
-        } catch (fbErr) {
-          this.messages.splice(loadingIdx, 1)
-          this.messages.push({ role: 'assistant', content: '❌ 流式失败，普通请求也失败：' + (fbErr.message || '网络错误'), type: 'text' })
-        }
       } catch (e) {
-        // Fallback: try non-streaming endpoint
-        const errMsg = e.message || 'Network error'
-        try {
-          const token = localStorage.getItem('token')
-          const fbResp = await axios.post(
-            API_BASE + '/chat',
-            {
-              session_id: this.currentId,
-              message: text,
-              mode: this.chatMode,
-              model: this.writeModel,
-              style_hint: this.styleHint,
-              scene_count: this.sceneCount,
-            },
-            { headers: { Authorization: 'Bearer ' + token }, timeout: 300000 }
-          )
-          this.messages.splice(loadingIdx, 1)
-          if (fbResp.data?.success) {
-            const script = fbResp.data.data?.script || fbResp.data.data?.content || JSON.stringify(fbResp.data.data)
-            this.messages.push({ role: 'assistant', content: script, type: 'script' })
-            this.currentId = fbResp.data.data?.session_id || this.currentId
-            this.loadConversations()
-            if (this.currentId) this.loadModifications(this.currentId)
-          } else {
-            this.messages.push({ role: 'assistant', content: '❌ 生成失败：' + (fbResp.data?.error || '未知错误'), type: 'text' })
-          }
-        } catch (fbErr) {
-          this.messages.splice(loadingIdx, 1)
-          this.messages.push({ role: 'assistant', content: '❌ 流式失败（' + errMsg + '），普通请求也失败：' + (fbErr.message || ''), type: 'text' })
-        }
-      } finally {
-        this.isLoading = false
+        this.messages.push({ role: 'assistant', content: '❌ 请求失败，请重试' })
         this.streaming = false
-        this.progressStage = ''
-        this.progressPct = 0
-        this.progressMsg = ''
+      }
+      
+      this.$nextTick(() => {
         this.scrollToBottom()
-      }
-    },
-
-    parseSSE(buffer) {
-      const events = []
-      const blocks = buffer.split('\n\n')
-      for (const block of blocks) {
-        if (!block.trim()) continue
-        const lines = block.split('\n')
-        let event = 'message'
-        let data = ''
-        for (const line of lines) {
-          if (line.startsWith('event: ')) event = line.slice(7).trim()
-          else if (line.startsWith('data: ')) data = line.slice(6)
-        }
-        if (data) {
-          try { events.push({ event, parsed: JSON.parse(data) }) }
-          catch (e) { events.push({ event, parsed: data }) }
-        }
-      }
-      return events
-    },
-    // ===== 人工修改 =====
-    startEdit(msgIndex) {
-      const msg = this.messages[msgIndex]
-      if (!msg || msg.type !== 'script') return
-      this.editMsgIndex = msgIndex
-      this.editContent = msg.content
-      this.editNotes = ''
-      this.editMode = true
-      this.showModHistory = false
-      this.showCert = false
-      this.$nextTick(() => this.scrollToBottom())
-    },
-    cancelEdit() {
-      this.editMode = false
-      this.editContent = ''
-      this.editNotes = ''
-      this.editMsgIndex = -1
-    },
-    async submitModification() {
-      if (!this.editContent.trim() || !this.currentId) return
-      this.submitting = true
-      try {
-        const token = localStorage.getItem('token')
-        const resp = await axios.post(
-          `${API_BASE}/modify/${this.currentId}`,
-          { content: this.editContent, notes: this.editNotes },
-          { headers: { Authorization: `Bearer ${token}` } }
-        )
-        if (resp.data?.success) {
-          // Reload messages and modifications
-          await this.loadMessages(this.currentId)
-          await this.loadModifications(this.currentId)
-          this.cancelEdit()
-          this.showModHistory = true
-          this.$message?.success?.('✅ 修改记录已保存，带时间戳')
-        } else {
-          alert('保存失败: ' + (resp.data?.error || '未知错误'))
-        }
-      } catch (e) {
-        alert('保存失败: ' + (e.message || '网络错误'))
-      } finally {
-        this.submitting = false
-      }
-    },
-    toggleModHistory() {
-      this.showModHistory = !this.showModHistory
-      if (this.showModHistory && this.currentId) {
-        this.loadModifications(this.currentId)
-      }
-      this.showCert = false
-    },
-
-    // ===== 版权证明 =====
-    async confirmOutline() {
-      if (!this.currentId) return
-      try {
-        const token = localStorage.getItem('token')
-        const resp = await axios.post(
-          `${API_BASE}/outline/confirm/${this.currentId}`,
-          { notes: 'User confirmed the story outline' },
-          { headers: { Authorization: `Bearer ${token}` } }
-        )
-        if (resp.data?.success) {
-          this.outlineConfirmed = true
-          await this.loadModifications(this.currentId)
-          this.$message?.success?.('✅ 大纲已确认，时间戳已记录')
-        } else {
-          alert('确认失败: ' + (resp.data?.error || ''))
-        }
-      } catch (e) {
-        alert('确认失败: ' + (e.message || ''))
-      }
-    },
-    async showCertificate() {
-      this.showCert = true
-      this.showModHistory = false
-      this.editMode = false
-      if (!this.currentId) { this.certData = null; return }
-      this.certLoading = true
-      try {
-        const token = localStorage.getItem('token')
-        const resp = await axios.get(`${API_BASE}/certificate/${this.currentId}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-        if (resp.data?.success) {
-          this.certData = resp.data.data
-        } else {
-          this.certData = null
-          alert('暂无证书: ' + (resp.data?.error || ''))
-        }
-      } catch (e) {
-        this.certData = null
-        alert('加载失败: ' + (e.message || ''))
-      } finally {
-        this.certLoading = false
-      }
+      })
     },
 
     useTemplate(tpl) {
-      this.userInput = `写一个${tpl.genre}剧：${tpl.title}。${tpl.synopsis}`
-      this.$nextTick(() => { this.autoResize(); this.$refs.inputBox?.focus() })
+      this.userInput = tpl.synopsis
+      this.sendMessage()
     },
-    applyQuickAction(action) {
-      if (action.action === 'clear') { this.newChat(); return }
-      if (action.action === 'export') { this.exportScript(); return }
-      if (this.messages.length === 0) return
-      this.userInput = action.label + ' 当前剧本'
-      this.$nextTick(() => this.$refs.inputBox?.focus())
+
+    quickAction(action, msgIndex) {
+      const msg = this.messages[msgIndex]
+      if (!msg) return
+      
+      let prompt = ''
+      switch (action) {
+        case 'rewrite':
+          prompt = '请重写这段剧本，保持原意但改进表达方式'
+          break
+        case 'shorten':
+          prompt = '请缩短这段剧本，保留核心情节'
+          break
+        case 'expand':
+          prompt = '请扩展这段剧本，增加更多细节和描写'
+          break
+        case 'change_style':
+          prompt = '请改变这段剧本的风格，使其更加生动有趣'
+          break
+        case 'export':
+          this.exportScript()
+          return
+      }
+      
+      this.userInput = prompt
+      this.messages.push({ role: 'user', content: prompt })
+      this.sendMessage()
     },
+
     exportScript() {
-      const script = this.messages
-        .filter(m => m.type === 'script' || m.type === 'modified_script')
-        .map(m => {
-          const header = m.type === 'modified_script' ? `\n【人工修改版 v${m.version} ${m.timestamp || ''}】\n` : '\n【AI原始生成】\n'
-          return header + m.content
-        })
-        .join('\n\n---\n\n')
-      if (!script) { alert('还没有剧本内容'); return }
-      const blob = new Blob([script], { type: 'text/markdown' })
+      const content = this.messages
+        .filter(m => m.role === 'assistant')
+        .map(m => m.content)
+        .join('\n\n')
+      
+      const blob = new Blob([content], { type: 'text/plain' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `剧本_${new Date().toISOString().slice(0, 10)}.md`
+      a.download = '剧本.txt'
       a.click()
       URL.revokeObjectURL(url)
     },
-    renderMarkdown(text) {
-      if (!text) return ''
-      const raw = marked.parse(text, { async: false })
-      return raw
-        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-        .replace(/<[^>]*on\w+\s*=[^>]*>/gi, '')
-        .replace(/<iframe[^>]*>[\s\S]*?<\/iframe>/gi, '')
-        .replace(/<object[^>]*>[\s\S]*?<\/object>/gi, '')
-        .replace(/<embed[^>]*>[\s\S]*?<\/embed>/gi, '')
-    },
-    autoResize() {
-      const el = this.$refs.inputBox
-      if (el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 120) + 'px' }
-    },
-    resetTextarea() {
-      const el = this.$refs.inputBox
-      if (el) el.style.height = 'auto'
-    },
-    scrollToBottom() {
-      this.$nextTick(() => {
-        const el = this.$refs.messageList
-        if (el) el.scrollTop = el.scrollHeight
-      })
-    },
-    // ── 小说改编 ──
-    handleFileUpload(e) {
-      const file = e.target.files[0]
-      if (!file) return
-      const reader = new FileReader()
-      reader.onload = (ev) => {
-        this.adaptScript = ev.target.result
-      }
-      reader.readAsText(file, 'UTF-8')
-    },
-    async submitAdaptScript() {
+
+    async adaptScriptContent() {
       if (!this.adaptScript.trim()) return
       this.adaptLoading = true
-      this.adaptResult = null
-      const token = localStorage.getItem('token')
+      
       try {
-        const resp = await fetch(`${API_BASE}/chat`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({
-            message: this.adaptScript,
-            mode: this.chatMode,
-            model: this.writeModel,
-          })
+        const token = localStorage.getItem('token')
+        const resp = await axios.post(`${API_BASE}/adapt`, {
+          script: this.adaptScript,
+          model: this.writeModel,
+        }, {
+          headers: { Authorization: `Bearer ${token}` }
         })
-        const data = await resp.json()
-        if (data.success && data.showrunner_analysis) {
-          this.adaptResult = data.showrunner_analysis
-        } else if (data.success && data.characters) {
-          this.adaptResult = {
-            deep_analysis: '剧本分析完成',
-            character_insights: data.characters.map(c => ({
-              name: c.name, role: c.role || '配角',
-              personality_read: c.personality || '', motivation: c.motivation || '',
-              arc_suggestion: c.growth_arc || ''
-            }))
-          }
+        
+        if (resp.data?.success) {
+          this.adaptResult = resp.data.data
         } else {
-          alert('分析失败: ' + (data.error || '未知错误'))
+          alert('改编失败: ' + (resp.data?.error || '未知错误'))
         }
       } catch (e) {
-        alert('请求失败: ' + e.message)
-      } finally {
-        this.adaptLoading = false
+        alert('改编失败，请重试')
+      }
+      
+      this.adaptLoading = false
+    },
+
+    resetPanels() {
+      this.streaming = false
+      this.progressPct = 0
+      this.progressMsg = ''
+    },
+
+    scrollToBottom() {
+      const el = this.$refs.messageList
+      if (el) {
+        el.scrollTop = el.scrollHeight
       }
     },
-  }
+  },
 }
 </script>
 
@@ -816,6 +471,7 @@ export default {
   background: var(--bg-primary, #1E1E2E);
   color: var(--text-primary, #EDEDF5);
   overflow: hidden;
+  font-family: 'Inter', 'Noto Sans SC', -apple-system, sans-serif;
 }
 
 /* Sidebar */
@@ -830,6 +486,7 @@ export default {
   position: relative;
 }
 .sidebar.collapsed { width: 0; min-width: 0; overflow: hidden; }
+
 .sidebar-header { padding: 16px; border-bottom: 1px solid var(--border, #2D2D4E); }
 .btn-new-chat {
   width: 100%; padding: 10px;
@@ -839,11 +496,13 @@ export default {
   transition: all 0.2s;
 }
 .btn-new-chat:hover { background: rgba(124, 92, 252, 0.1); }
+
 .conversation-list { flex: 1; overflow-y: auto; padding: 8px; }
 .conv-item { padding: 10px 12px; border-radius: 8px; cursor: pointer; margin-bottom: 4px; transition: all 0.2s; }
 .conv-item:hover, .conv-item.active { background: rgba(124, 92, 252, 0.15); }
 .conv-title { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .conv-meta { font-size: 11px; color: var(--text-muted, #6C6C8A); margin-top: 2px; }
+
 .btn-sidebar-toggle {
   position: absolute; right: -32px; top: 12px;
   width: 32px; height: 32px;
@@ -855,6 +514,7 @@ export default {
 
 /* Main Area */
 .main-area { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+
 .chat-header {
   display: flex; align-items: center; justify-content: space-between;
   padding: 12px 20px; border-bottom: 1px solid var(--border, #2D2D4E);
@@ -866,243 +526,155 @@ export default {
 .header-badge { font-size: 11px; padding: 2px 10px; border-radius: 10px; margin-left: 8px; }
 .mode-precise { background: rgba(124, 92, 252, 0.2); color: #7C5CFC; }
 .mode-fast { background: rgba(0, 200, 117, 0.2); color: #00C875; }
+
 .header-right { display: flex; align-items: center; gap: 12px; }
 .mode-switch { display: flex; align-items: center; gap: 6px; font-size: 13px; }
 .model-select { background: #2D2D4E; color: #EDEDF5; border: 1px solid #3D3D5E; border-radius: 6px; padding: 4px 8px; font-size: 13px; cursor: pointer; }
 .btn-settings { background: transparent; border: 1px solid var(--border, #2D2D4E); color: var(--text-secondary, #9A9ABF); width: 32px; height: 32px; border-radius: 6px; cursor: pointer; font-size: 16px; }
 .btn-settings:hover { border-color: var(--accent, #7C5CFC); color: var(--accent, #7C5CFC); }
 
-/* Message List */
-.message-list { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
-.message-list::-webkit-scrollbar { width: 6px; }
-.message-list::-webkit-scrollbar-thumb { background: #3D3D5E; border-radius: 3px; }
-
-/* Welcome */
-.welcome { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px; text-align: center; }
-.welcome-icon { font-size: 48px; margin-bottom: 12px; }
-.welcome-title { font-size: 24px; font-weight: 700; margin-bottom: 8px; }
-.welcome-desc { font-size: 15px; color: var(--text-muted, #6C6C8A); margin-bottom: 24px; }
-.welcome-templates { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; max-width: 800px; width: 100%; }
-.template-card { display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: rgba(255,255,255,0.03); border: 1px solid var(--border, #2D2D4E); border-radius: 10px; cursor: pointer; transition: all 0.2s; text-align: left; }
-.template-card:hover { border-color: var(--accent, #7C5CFC); background: rgba(124, 92, 252, 0.08); transform: translateY(-1px); }
-.tpl-emoji { font-size: 28px; }
-.tpl-title { font-size: 14px; font-weight: 600; }
-.tpl-desc { font-size: 12px; color: var(--text-muted, #6C6C8A); margin-top: 2px; }
-
-/* Messages */
-.message { display: flex; gap: 12px; max-width: 800px; width: 100%; margin: 0 auto; animation: fadeIn 0.3s ease; }
-@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-.message.user { flex-direction: row-reverse; }
-.msg-avatar { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; background: rgba(124, 92, 252, 0.15); }
-.message.user .msg-avatar { background: rgba(0, 200, 117, 0.15); }
-.msg-content { flex: 1; min-width: 0; }
-.msg-role-label { font-size: 12px; color: var(--text-muted, #6C6C8A); margin-bottom: 4px; display: flex; gap: 8px; }
-.msg-timestamp { color: #555; font-size: 11px; }
-.message.user .msg-content { text-align: right; }
-.text-content { font-size: 15px; line-height: 1.6; padding: 12px 16px; border-radius: 12px; background: rgba(255,255,255,0.03); display: inline-block; max-width: 100%; }
-.message.user .text-content { background: rgba(124, 92, 252, 0.15); text-align: left; }
-.modification-note { color: #A78BFA; font-size: 14px !important; }
-
-/* Script content */
-.script-content { font-size: 16px; line-height: 1.8; padding: 20px 24px; background: rgba(0,0,0,0.2); border: 1px solid var(--border, #2D2D4E); border-radius: 12px; overflow-x: auto; }
-.modified-content { border-color: #00C875; background: rgba(0,200,117,0.05); }
-.char-card { background: rgba(124,92,252,0.06); border: 1px solid rgba(124,92,252,0.2); border-radius: 10px; padding: 14px 18px; margin-bottom: 12px; }
-.char-card h4 { margin: 0 0 4px 0; font-size: 15px; color: #A78BFA; }
-.char-card .char-role { font-weight: normal; font-size: 12px; color: #888; }
-.char-card .char-meta { font-size: 12px; color: #888; margin-bottom: 6px; }
-.char-card .char-field { font-size: 13px; line-height: 1.6; margin-bottom: 2px; }
-.char-card .char-label { color: #A78BFA; font-weight: 600; }
-.char-card .char-tag { display: inline-block; margin: 2px 4px 2px 0; padding: 2px 8px; border-radius: 10px; background: rgba(124,92,252,0.12); color: #C4B5FD; font-size: 12px; }
-.modified-badge { font-size: 12px; padding: 4px 12px; border-radius: 8px; background: rgba(0,200,117,0.15); color: #00C875; display: inline-block; margin-bottom: 12px; }
-.script-actions { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
-.btn-sm { padding: 6px 14px; border-radius: 8px; border: 1px solid var(--border, #2D2D4E); background: rgba(255,255,255,0.04); color: var(--text-secondary, #9A9ABF); cursor: pointer; font-size: 12px; transition: all 0.2s; }
-.btn-sm:hover { border-color: var(--accent, #7C5CFC); color: var(--accent, #7C5CFC); background: rgba(124, 92, 252, 0.08); }
-.btn-cancel { border-color: #555; color: #888; }
-.btn-cancel:hover { border-color: #ff6b6b; color: #ff6b6b; background: rgba(255,107,107,0.08); }
-
-.markdown-body { max-width: 100%; }
-.markdown-body h1 { font-size: 22px; font-weight: 700; margin: 16px 0 8px; color: #7C5CFC; }
-.markdown-body h2 { font-size: 18px; font-weight: 700; margin: 14px 0 6px; color: #A78BFA; }
-.markdown-body h3 { font-size: 16px; font-weight: 600; margin: 12px 0 6px; color: #C4B5FD; }
-.markdown-body strong { color: #FFD700; }
-.markdown-body ul { padding-left: 20px; margin: 8px 0; }
-.markdown-body li { margin: 4px 0; }
-
-/* Typing */
-.typing-indicator { display: flex; gap: 4px; padding: 12px 16px; align-items: center; }
-.typing-indicator span { width: 8px; height: 8px; border-radius: 50%; background: var(--accent, #7C5CFC); animation: typing 1.4s infinite; }
-.typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
-.typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
-@keyframes typing { 0%,60%,100% { opacity: 0.3; transform: scale(0.8); } 30% { opacity: 1; transform: scale(1); } }
-
-/* Edit Panel */
-.edit-panel { max-width: 800px; width: 100%; margin: 0 auto; padding: 20px; background: #1A1A2E; border: 1px solid var(--accent, #7C5CFC); border-radius: 12px; }
-.edit-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-.edit-title { font-weight: 700; font-size: 16px; }
-.edit-info { font-size: 12px; color: #888; margin-bottom: 12px; }
-.edit-textarea { width: 100%; background: #0D0D1A; border: 1px solid #3D3D5E; border-radius: 8px; padding: 12px; color: #EDEDF5; font-size: 14px; font-family: inherit; line-height: 1.6; resize: vertical; outline: none; box-sizing: border-box; }
-.edit-textarea:focus { border-color: var(--accent, #7C5CFC); }
-.edit-notes-row { display: flex; gap: 8px; margin-top: 10px; align-items: center; }
-.edit-notes-input { flex: 1; background: #0D0D1A; border: 1px solid #3D3D5E; border-radius: 8px; padding: 10px 12px; color: #EDEDF5; font-size: 13px; outline: none; }
-.edit-notes-input:focus { border-color: var(--accent, #7C5CFC); }
-.edit-notes-input::placeholder { color: #555; }
-.btn-submit-mod { padding: 10px 20px; border: none; border-radius: 8px; background: var(--accent, #7C5CFC); color: white; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
-.btn-submit-mod:hover:not(:disabled) { background: #6A4CE8; }
-.btn-submit-mod:disabled { opacity: 0.4; cursor: not-allowed; }
-
-/* Modification History */
-.mod-history-panel { max-width: 800px; width: 100%; margin: 0 auto; padding: 16px 20px; background: #1A1A2E; border: 1px solid #3D3D5E; border-radius: 12px; }
-.mod-history-header { display: flex; justify-content: space-between; align-items: center; font-weight: 700; margin-bottom: 12px; font-size: 14px; }
-.mod-empty { text-align: center; padding: 20px; color: #888; font-size: 13px; }
-.mod-item { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid #2D2D4E; align-items: flex-start; }
-.mod-item:last-child { border-bottom: none; }
-.mod-version { width: 32px; height: 32px; border-radius: 50%; background: rgba(124,92,252,0.2); color: #7C5CFC; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0; }
-.mod-info { flex: 1; }
-.mod-time { font-size: 12px; color: #888; }
-.mod-diff { font-size: 13px; color: #C4B5FD; margin-top: 2px; }
-.mod-notes { font-size: 12px; color: #A78BFA; margin-top: 2px; }
-.mod-hash { font-size: 10px; color: #555; font-family: monospace; }
-
-/* Certificate Panel */
-.cert-panel { max-width: 800px; width: 100%; margin: 0 auto; padding: 16px 20px; background: #1A1A2E; border: 1px solid #FFD700; border-radius: 12px; }
-.cert-panel-header { display: flex; justify-content: space-between; align-items: center; font-weight: 700; font-size: 15px; margin-bottom: 12px; }
-.cert-loading { text-align: center; padding: 20px; color: #888; }
-.cert-title-row { display: flex; justify-content: space-between; align-items: center; background: rgba(255,215,0,0.08); padding: 10px 14px; border-radius: 8px; margin-bottom: 12px; }
-.cert-title-row strong { font-size: 16px; }
-.cert-time { font-size: 12px; color: #888; }
-.cert-section { margin-bottom: 12px; }
-.cert-section-title { font-size: 13px; font-weight: 600; color: #FFD700; margin-bottom: 8px; }
-.cert-row { display: flex; gap: 12px; align-items: center; padding: 4px 0; font-size: 13px; }
-.cert-label { color: #888; width: 90px; flex-shrink: 0; }
-.cert-row code { font-family: monospace; font-size: 11px; color: #7C5CFC; background: #12122a; padding: 2px 6px; border-radius: 4px; }
-.cert-decl { font-size: 12px; color: #ccc; line-height: 1.6; padding: 8px 12px; background: rgba(0,0,0,0.2); border-radius: 6px; }
-
-/* Settings Panel */
-.settings-panel { border-top: 1px solid var(--border, #2D2D4E); background: #1A1A2E; padding: 16px 20px; }
-.settings-inner { max-width: 600px; margin: 0 auto; }
-.settings-inner h3 { font-size: 14px; margin-bottom: 12px; color: var(--text-secondary, #9A9ABF); }
-.setting-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-.setting-row label { font-size: 13px; color: var(--text-secondary, #9A9ABF); }
-.setting-row select { background: #2D2D4E; color: #EDEDF5; border: 1px solid #3D3D5E; border-radius: 6px; padding: 6px 10px; font-size: 13px; width: 200px; }
-.btn-close-settings { margin-top: 8px; background: transparent; border: 1px solid var(--border, #2D2D4E); color: var(--text-secondary, #9A9ABF); padding: 6px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; }
-
-/* Input Area */
-.input-area { border-top: 1px solid var(--border, #2D2D4E); padding: 12px 20px 16px; background: rgba(30, 30, 46, 0.98); }
-.input-wrapper { display: flex; gap: 8px; align-items: flex-end; max-width: 800px; margin: 0 auto; }
-.chat-input { flex: 1; background: #2A2A44; border: 1px solid #3D3D5E; border-radius: 12px; padding: 12px 16px; font-size: 15px; color: #EDEDF5; outline: none; resize: none; min-height: 48px; max-height: 120px; line-height: 1.5; font-family: inherit; transition: border-color 0.2s; }
-.chat-input:focus { border-color: var(--accent, #7C5CFC); }
-.chat-input::placeholder { color: #5C5C7A; }
-.btn-send { width: 48px; height: 48px; border-radius: 12px; border: none; background: var(--accent, #7C5CFC); color: white; font-size: 18px; cursor: pointer; transition: all 0.2s; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
-.btn-send:hover:not(:disabled) { background: #6A4CE8; transform: scale(1.05); }
-.btn-send:disabled { opacity: 0.4; cursor: not-allowed; }
-.quick-actions { display: flex; gap: 8px; max-width: 800px; margin: 8px auto 0; flex-wrap: wrap; }
-.quick-action-tag { font-size: 12px; padding: 4px 12px; border-radius: 14px; background: rgba(255,255,255,0.04); border: 1px solid var(--border, #2D2D4E); color: var(--text-muted, #6C6C8A); cursor: pointer; transition: all 0.2s; user-select: none; }
-.quick-action-tag:hover { border-color: var(--accent, #7C5CFC); color: var(--accent, #7C5CFC); background: rgba(124, 92, 252, 0.08); }
-
-/* Responsive */
-@media (max-width: 768px) {
-  .sidebar { display: none; }
-  .welcome-templates { grid-template-columns: 1fr; }
-  .chat-header { padding: 10px 12px; }
-  .header-right .mode-switch { display: none; }
-  .edit-notes-row { flex-direction: column; }
-  .edit-notes-input { width: 100%; }
-  .btn-submit-mod { width: 100%; }
+.btn-upload-script {
+  padding: 6px 14px; background: rgba(138,43,226,0.12); border: 1px solid rgba(138,43,226,0.3);
+  border-radius: 8px; color: var(--accent, #7C5CFC); font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: all 0.2s; white-space: nowrap;
 }
+.btn-upload-script:hover { background: rgba(138,43,226,0.2); }
 
-
-.stream-progress {
-  padding: 8px 20px;
-  background: rgba(124, 92, 252, 0.08);
-  border-top: 1px solid var(--border, #2D2D4E);
-}
-.stream-progress-bar {
-  height: 4px;
-  background: #2D2D4E;
-  border-radius: 2px;
-  overflow: hidden;
-}
-.stream-progress-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #7C5CFC, #A78BFA);
-  border-radius: 2px;
-  transition: width 0.3s ease;
-}
-.stream-progress-text {
-  font-size: 12px;
-  color: var(--text-muted, #6C6C8A);
-  margin-top: 4px;
-  text-align: center;
-}
-
-
-@media (max-width: 768px) {
-  .script-chat { flex-direction: column; }
-  .sidebar { width: 100%; height: auto; max-height: 140px; border-right: none; border-bottom: 1px solid var(--border); }
-  .sidebar.collapsed { max-height: 0; overflow: hidden; padding: 0; }
-  .main-area { padding: 0; }
-  .chat-header { flex-wrap: wrap; gap: 6px; }
-  .header-right { width: 100%; justify-content: flex-start; }
-  .message-list { padding: 8px; }
-  .message { max-width: 100%; }
-  .input-area { padding: 8px; }
-  .input-row { gap: 6px; }
-  .msg-textarea { font-size: 14px; min-height: 44px; }
-  .btn-send { width: 44px; height: 44px; font-size: 18px; }
-}
-
-/* ===== Mobile Responsive ===== */
-@media (max-width: 768px) {
-  .main-content { padding-bottom: 72px !important; }
-}
-
-/* ===== 模式切换 Tab ===== */
-.mode-tabs {
-  display: flex; gap: 0; padding: 12px 20px 0;
-  border-bottom: 1px solid var(--border, #2D2D4E);
-}
+/* Mode Tabs */
+.mode-tabs { display: flex; gap: 4px; padding: 12px 20px 0; border-bottom: 1px solid var(--border, #2D2D4E); }
 .mode-tab {
-  padding: 10px 24px; font-size: 14px; font-weight: 600;
-  background: none; border: none; border-bottom: 2px solid transparent;
-  color: var(--text-muted, #6C6C8A); cursor: pointer; transition: all 0.2s;
-}
-.mode-tab:hover { color: var(--text-primary, #EDEDF5); }
-.mode-tab.active { color: var(--accent, #7C5CFC); border-bottom-color: var(--accent, #7C5CFC); }
-
-/* ===== 小说改编面板 ===== */
-.adapt-panel { padding: 24px 20px; max-width: 800px; margin: 0 auto; }
-.adapt-header h2 { font-size: 22px; color: var(--text-primary, #EDEDF5); margin-bottom: 8px; }
-.adapt-header p { font-size: 13px; color: var(--text-muted, #6C6C8A); margin-bottom: 20px; }
-.adapt-textarea {
-  width: 100%; min-height: 300px; padding: 16px;
-  background: var(--bg-input, #1A1A2E); border: 1px solid var(--border, #2D2D4E);
-  border-radius: 12px; color: var(--text-primary, #EDEDF5); font-size: 14px;
-  line-height: 1.8; resize: vertical; font-family: 'Noto Sans SC', sans-serif;
-  transition: border-color 0.2s;
-}
-.adapt-textarea:focus { outline: none; border-color: var(--accent, #7C5CFC); }
-.adapt-actions { display: flex; gap: 12px; margin-top: 16px; flex-wrap: wrap; align-items: center; }
-.adapt-upload-btn {
-  padding: 10px 20px; background: var(--bg-card, #252536);
-  border: 1px solid var(--border, #2D2D4E); border-radius: 8px;
-  color: var(--text-secondary, #9A9ABF); font-size: 13px; cursor: pointer;
+  padding: 8px 16px; border: none; background: transparent; color: var(--text-secondary, #9A9ABF);
+  font-size: 14px; font-weight: 500; cursor: pointer; border-radius: 8px 8px 0 0;
   transition: all 0.2s;
 }
-.adapt-upload-btn:hover { border-color: var(--accent, #7C5CFC); color: var(--accent, #7C5CFC); }
+.mode-tab:hover { background: rgba(124, 92, 252, 0.1); color: var(--text-primary, #EDEDF5); }
+.mode-tab.active { background: rgba(124, 92, 252, 0.15); color: var(--accent, #7C5CFC); }
+
+/* Tab Content */
+.tab-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+/* Message List */
+.message-list { flex: 1; overflow-y: auto; padding: 20px; }
+.message { display: flex; gap: 12px; margin-bottom: 20px; }
+.message.user { flex-direction: row-reverse; }
+.message-avatar {
+  width: 36px; height: 36px; border-radius: 50%;
+  background: var(--bg-card, #252536); display: flex; align-items: center; justify-content: center;
+  font-size: 18px; flex-shrink: 0;
+}
+.message.user .message-avatar { background: var(--accent, #7C5CFC); }
+.message-bubble {
+  max-width: 70%; padding: 12px 16px; border-radius: 12px;
+  background: var(--bg-card, #252536); border: 1px solid var(--border, #2D2D4E);
+}
+.message.user .message-bubble { background: var(--accent, #7C5CFC); border-color: var(--accent, #7C5CFC); }
+.message-content { font-size: 14px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+.message.user .message-content { color: #fff; }
+.message-content p { margin: 0 0 8px 0; }
+.message-content p:last-child { margin-bottom: 0; }
+.message-content strong { color: var(--accent, #7C5CFC); }
+.message.user .message-content strong { color: #fff; }
+
+.message-actions { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+.action-btn {
+  padding: 4px 10px; background: rgba(124, 92, 252, 0.1); border: 1px solid rgba(124, 92, 252, 0.2);
+  border-radius: 6px; color: var(--accent, #7C5CFC); font-size: 12px; cursor: pointer;
+  transition: all 0.2s;
+}
+.action-btn:hover { background: rgba(124, 92, 252, 0.2); }
+
+/* Welcome */
+.welcome { text-align: center; padding: 40px 20px; }
+.welcome-icon { font-size: 48px; margin-bottom: 16px; }
+.welcome-title { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
+.welcome-desc { font-size: 14px; color: var(--text-secondary, #9A9ABF); margin-bottom: 24px; }
+.welcome-templates { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+.template-card {
+  padding: 16px; background: var(--bg-card, #252536); border: 1px solid var(--border, #2D2D4E);
+  border-radius: 12px; cursor: pointer; transition: all 0.2s; text-align: left;
+}
+.template-card:hover { border-color: var(--accent, #7C5CFC); transform: translateY(-2px); }
+.tpl-emoji { font-size: 24px; display: block; margin-bottom: 8px; }
+.tpl-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+.tpl-desc { font-size: 12px; color: var(--text-muted, #6C6C8A); line-height: 1.4; }
+
+/* Streaming Indicator */
+.streaming-indicator { display: flex; align-items: center; gap: 4px; color: var(--text-secondary, #9A9ABF); font-size: 14px; }
+.dot { animation: blink 1.4s infinite both; }
+.dot:nth-child(2) { animation-delay: 0.2s; }
+.dot:nth-child(3) { animation-delay: 0.4s; }
+@keyframes blink { 0%, 80%, 100% { opacity: 0; } 40% { opacity: 1; } }
+
+/* Progress Bar */
+.progress-bar { padding: 8px 20px; background: rgba(30, 30, 46, 0.95); border-bottom: 1px solid var(--border, #2D2D4E); }
+.progress-track { height: 4px; background: var(--bg-hover, rgba(255,255,255,0.04)); border-radius: 2px; overflow: hidden; margin-bottom: 4px; }
+.progress-fill { height: 100%; background: var(--accent, #7C5CFC); border-radius: 2px; transition: width 0.3s; }
+.progress-text { font-size: 11px; color: var(--text-muted, #6C6C8A); text-align: center; }
+
+/* Input Area */
+.input-area { padding: 16px 20px; border-top: 1px solid var(--border, #2D2D4E); background: rgba(30, 30, 46, 0.95); }
+.input-wrapper { display: flex; gap: 12px; align-items: flex-end; }
+.input-textarea {
+  flex: 1; padding: 12px 16px; background: var(--bg-input, #1A1A2E);
+  border: 1px solid var(--border, #2D2D4E); border-radius: 12px;
+  color: var(--text-primary, #EDEDF5); font-size: 14px; resize: none;
+  outline: none; transition: border-color 0.2s; font-family: inherit;
+}
+.input-textarea:focus { border-color: var(--accent, #7C5CFC); }
+.send-btn {
+  width: 40px; height: 40px; background: var(--accent, #7C5CFC); color: #fff;
+  border: none; border-radius: 10px; font-size: 18px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s; flex-shrink: 0;
+}
+.send-btn:hover:not(:disabled) { background: #8A2BE2; transform: scale(1.05); }
+.send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.input-hint { font-size: 11px; color: var(--text-muted, #6C6C8A); margin-top: 8px; text-align: center; }
+
+/* Settings Overlay */
+.settings-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 100;
+}
+.settings-panel {
+  background: var(--bg-card, #252536); border: 1px solid var(--border, #2D2D4E);
+  border-radius: 16px; padding: 24px; width: 400px; max-width: 90vw;
+}
+.settings-panel h3 { font-size: 18px; font-weight: 700; margin-bottom: 20px; }
+.setting-item { margin-bottom: 16px; }
+.setting-item label { display: block; font-size: 13px; color: var(--text-secondary, #9A9ABF); margin-bottom: 6px; }
+.setting-item select, .setting-item input, .setting-item textarea {
+  width: 100%; padding: 8px 12px; background: var(--bg-input, #1A1A2E);
+  border: 1px solid var(--border, #2D2D4E); border-radius: 8px;
+  color: var(--text-primary, #EDEDF5); font-size: 14px; outline: none;
+}
+.setting-item textarea { resize: vertical; }
+.btn-close-settings {
+  width: 100%; padding: 10px; background: var(--accent, #7C5CFC); color: #fff;
+  border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
+}
+
+/* Adapt Mode */
+.adapt-container { flex: 1; padding: 24px; overflow-y: auto; }
+.adapt-header { margin-bottom: 24px; }
+.adapt-header h2 { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
+.adapt-desc { font-size: 14px; color: var(--text-secondary, #9A9ABF); }
+.adapt-input { margin-bottom: 24px; }
+.adapt-textarea {
+  width: 100%; padding: 16px; background: var(--bg-input, #1A1A2E);
+  border: 1px solid var(--border, #2D2D4E); border-radius: 12px;
+  color: var(--text-primary, #EDEDF5); font-size: 14px; resize: vertical;
+  outline: none; font-family: inherit; margin-bottom: 12px;
+}
+.adapt-textarea:focus { border-color: var(--accent, #7C5CFC); }
 .adapt-submit-btn {
-  padding: 10px 28px; background: linear-gradient(135deg, var(--accent, #7C5CFC), #8A2BE2);
-  color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 700;
-  cursor: pointer; transition: all 0.2s;
+  padding: 12px 24px; background: var(--accent, #7C5CFC); color: #fff;
+  border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
+  transition: all 0.2s;
 }
-.adapt-submit-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(138,43,226,0.3); }
-.adapt-submit-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.adapt-clear-btn {
-  padding: 10px 20px; background: transparent; border: 1px solid var(--border, #2D2D4E);
-  border-radius: 8px; color: var(--text-muted, #6C6C8A); font-size: 13px; cursor: pointer;
-}
-.adapt-clear-btn:hover { border-color: var(--danger, #FF5252); color: var(--danger, #FF5252); }
+.adapt-submit-btn:hover:not(:disabled) { background: #8A2BE2; transform: translateY(-1px); }
+.adapt-submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .adapt-result { margin-top: 24px; }
-.adapt-analysis-box {
+.adapt-analysis-box, .adapt-structure-box {
   background: var(--bg-card, #252536); border: 1px solid var(--border, #2D2D4E);
   border-radius: 12px; padding: 20px; margin-bottom: 16px;
 }
@@ -1115,26 +687,24 @@ export default {
   margin-bottom: 6px; font-size: 13px; color: var(--text-primary, #EDEDF5);
 }
 .adapt-char-meta { font-size: 12px; color: var(--text-muted, #6C6C8A); margin-top: 4px; }
-.adapt-structure-box {
-  background: var(--bg-card, #252536); border: 1px solid var(--border, #2D2D4E);
-  border-radius: 12px; padding: 16px; margin-bottom: 12px;
-}
-.adapt-structure-box h4 { font-size: 14px; margin-bottom: 8px; }
-.adapt-structure-box p { font-size: 13px; color: var(--text-secondary, #9A9ABF); line-height: 1.6; }
-.adapt-list-box {
-  background: var(--bg-card, #252536); border: 1px solid var(--border, #2D2D4E);
-  border-radius: 12px; padding: 16px; margin-bottom: 12px;
-}
-.adapt-list-box h4 { font-size: 14px; margin-bottom: 6px; }
-.adapt-list-box ul { padding-left: 20px; font-size: 13px; color: var(--text-secondary, #9A9ABF); }
-.adapt-list-box li { margin-bottom: 4px; }
 
-/* 上传剧本按钮（右侧栏） */
-.btn-upload-script {
-  padding: 6px 14px; background: rgba(138,43,226,0.12); border: 1px solid rgba(138,43,226,0.3);
-  border-radius: 8px; color: var(--accent, #7C5CFC); font-size: 13px; font-weight: 600;
-  cursor: pointer; transition: all 0.2s; white-space: nowrap;
+/* Spinner */
+.spinner {
+  width: 18px; height: 18px; border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: #fff; border-radius: 50%; animation: spin 0.8s linear infinite;
 }
-.btn-upload-script:hover { background: rgba(138,43,226,0.2); }
+@keyframes spin { to { transform: rotate(360deg); } }
 
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border, #2D2D4E); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted, #6C6C8A); }
+
+/* Responsive */
+@media (max-width: 768px) {
+  .sidebar { position: absolute; z-index: 10; height: 100%; }
+  .message-bubble { max-width: 85%; }
+  .welcome-templates { grid-template-columns: 1fr; }
+}
 </style>

@@ -1,9 +1,9 @@
 <template>
   <div class="profile-page">
-    <!-- 顶部用户信息卡片 -->
+    <!-- 顶部用户信息 -->
     <div class="profile-header">
       <div class="profile-avatar">
-        <div class="avatar-circle">{{ userInitial }}</div>
+        <div class="avatar-circle" :style="{ background: avatarGradient }">{{ userInitial }}</div>
         <div class="user-info">
           <div class="username">{{ username || '用户' }}</div>
           <div class="user-tier"><span class="tag" :class="tierTag">{{ tierName }}</span></div>
@@ -73,106 +73,68 @@
           <span class="filter-chip" :class="{active: filter==='all'}" @click="filter='all'">全部</span>
           <span class="filter-chip" :class="{active: filter==='completed'}" @click="filter='completed'">已完成</span>
           <span class="filter-chip" :class="{active: filter==='unfinished'}" @click="filter='unfinished'">未完成</span>
-          <button class="btn btn-primary btn-sm" @click="$router.push('/create')" style="margin-left:12px">+ 新建</button>
         </div>
       </div>
-      <div class="works-list">
-        <div v-for="w in filteredWorks" :key="w.id" class="work-card">
-          <div class="work-thumb">🎬</div>
-          <div class="work-info">
-            <div class="work-name">{{ w.title || '未命名' }}</div>
-            <div class="work-meta">{{ w.createdAt || '--' }}</div>
+      <div class="works-grid">
+        <div v-for="work in filteredWorks" :key="work.id" class="work-card">
+          <div class="work-thumb" v-if="work.thumbnail">
+            <img :src="work.thumbnail" />
           </div>
-          <div class="work-actions">
-            <span class="work-status" :class="w.displayStatus">{{ w.statusText }}</span>
-            <button class="btn btn-ghost btn-sm" @click.stop="$router.push('/track/'+w.id)" v-if="isCompleted(w)">查看</button>
-            <button class="btn btn-primary btn-sm" @click.stop="continueWork(w)" v-else>继续</button>
-            <button class="btn btn-ghost btn-sm color-danger" @click.stop="confirmDelete(w)">删除</button>
+          <div class="work-thumb empty" v-else>🎬</div>
+          <div class="work-info">
+            <div class="work-title">{{ work.title }}</div>
+            <div class="work-meta">{{ work.genre }} · {{ work.createdAt }}</div>
+            <div class="work-status" :class="work.status">{{ statusText(work.status) }}</div>
           </div>
         </div>
-        <div v-if="filteredWorks.length === 0" class="empty-hint">暂无作品</div>
+        <div v-if="filteredWorks.length === 0" class="empty-works">
+          <span>🎬</span>
+          <p>暂无作品，快去创作吧！</p>
+          <button class="btn-create" @click="$router.push('/create/pro')">开始创作</button>
+        </div>
       </div>
     </div>
 
-    <!-- 订单记录 -->
+    <!-- 订单 -->
     <div class="orders-section" v-if="activeTab === 'orders'">
       <div class="section-header">
-        <span class="section-title">充值订单</span>
-        <button class="btn btn-primary btn-sm" @click="$router.push('/membership')">去充值</button>
+        <span class="section-title">订单记录</span>
       </div>
-      <div class="orders-table-wrap">
-        <table class="orders-table">
-          <thead>
-            <tr>
-              <th>订单号</th>
-              <th>类型</th>
-              <th>扣款金额</th>
-              <th>时长</th>
-              <th>状态</th>
-              <th>创建时间</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="o in orders" :key="o.id">
-              <td class="order-id">{{ o.order_no || o.id }}</td>
-              <td>{{ o.type_text || o.name || '充值' }}</td>
-              <td class="order-amount">{{ o.amount }}</td>
-              <td>{{ o.duration || '--' }}</td>
-              <td>
-                <span class="tag" :class="o.status_class || 'tag-muted'">{{ o.status_text || o.status || '未知' }}</span>
-              </td>
-              <td>{{ o.created_at || '--' }}</td>
-            </tr>
-            <tr v-if="orders.length === 0">
-              <td colspan="6" class="empty-row">暂无订单记录</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <!-- 删除确认弹窗 -->
-    <div class="modal-overlay" v-if="showDeleteConfirm" @click.self="cancelDelete">
-      <div class="modal-panel sm">
-        <div class="modal-header">
-          <span class="modal-title">确认删除</span>
-          <button class="modal-close" @click="cancelDelete">✕</button>
+      <div class="orders-list">
+        <div v-for="order in orders" :key="order.id" class="order-item">
+          <div class="order-info">
+            <div class="order-id">#{{ order.id }}</div>
+            <div class="order-desc">{{ order.description }}</div>
+            <div class="order-time">{{ order.createdAt }}</div>
+          </div>
+          <div class="order-amount" :class="order.status">{{ order.amount }}元</div>
         </div>
-        <div class="modal-body">
-          <p>确定删除《{{ deleteTarget?.title || '未命名' }}》吗？</p>
-          <p class="hint">此操作不可撤销</p>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-ghost" @click="cancelDelete">取消</button>
-          <button class="btn btn-danger" @click="deleteWork">确认删除</button>
+        <div v-if="orders.length === 0" class="empty-orders">
+          <span>📋</span>
+          <p>暂无订单记录</p>
         </div>
       </div>
     </div>
 
     <!-- 修改密码弹窗 -->
     <div class="modal-overlay" v-if="showChangePwd" @click.self="showChangePwd = false">
-      <div class="modal-panel sm">
-        <div class="modal-header">
-          <span class="modal-title">修改密码</span>
-          <button class="modal-close" @click="showChangePwd = false">✕</button>
+      <div class="modal">
+        <h3>修改密码</h3>
+        <div class="form-group">
+          <label>旧密码</label>
+          <input v-model="oldPwd" type="password" placeholder="请输入旧密码" />
         </div>
-        <div class="modal-body">
-          <div class="form-group">
-            <label class="form-label">当前密码</label>
-            <input class="input" type="password" v-model="pwdForm.old" placeholder="请输入当前密码" />
-          </div>
-          <div class="form-group">
-            <label class="form-label">新密码</label>
-            <input class="input" type="password" v-model="pwdForm.new1" placeholder="请输入新密码" />
-          </div>
-          <div class="form-group">
-            <label class="form-label">确认密码</label>
-            <input class="input" type="password" v-model="pwdForm.new2" placeholder="请再次输入新密码" />
-          </div>
+        <div class="form-group">
+          <label>新密码</label>
+          <input v-model="newPwd" type="password" placeholder="请输入新密码" />
         </div>
-        <div class="modal-footer">
-          <button class="btn btn-ghost" @click="showChangePwd = false">取消</button>
-          <button class="btn btn-primary" @click="changePassword">保存</button>
+        <div class="form-group">
+          <label>确认新密码</label>
+          <input v-model="confirmPwd" type="password" placeholder="请再次输入新密码" />
+        </div>
+        <div class="modal-actions">
+          <button class="btn-cancel" @click="showChangePwd = false">取消</button>
+          <button class="btn-confirm" @click="changePassword">确认修改</button>
         </div>
       </div>
     </div>
@@ -180,668 +142,277 @@
 </template>
 
 <script>
-import axios from 'axios'
-
 export default {
-  name: 'ProfilePage',
   data() {
     return {
-      token: '',
       username: '',
       userTier: '',
       creditBalance: 0,
       worksCount: 0,
       ordersCount: 0,
       filter: 'all',
-      activeTab: null,
-      deleteTarget: null,
-      showDeleteConfirm: false,
+      activeTab: '',
       showChangePwd: false,
-      pwdForm: { old: '', new1: '', new2: '' },
-      recentWorks: [],
+      oldPwd: '',
+      newPwd: '',
+      confirmPwd: '',
+      works: [],
       orders: [],
     }
   },
   computed: {
-    userInitial() {
-      return (this.username || 'U').charAt(0).toUpperCase()
-    },
     tierName() {
       return { pro: '专业会员', enterprise: '企业版' }[this.userTier] || '免费版'
     },
     tierTag() {
-      return { pro: 'tag-blue', enterprise: 'tag-orange' }[this.userTier] || 'tag-muted'
+      return { pro: 'tag-pro', enterprise: 'tag-enterprise' }[this.userTier] || 'tag-free'
+    },
+    userInitial() {
+      return (this.username || 'U').charAt(0).toUpperCase()
+    },
+    avatarGradient() {
+      const gradients = [
+        'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+        'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+        'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
+      ]
+      const hash = (this.username || 'U').split('').reduce((a, b) => a + b.charCodeAt(0), 0)
+      return gradients[hash % gradients.length]
     },
     filteredWorks() {
-      if (this.filter === 'all') return this.recentWorks
-      if (this.filter === 'completed') return this.recentWorks.filter(w => w.displayStatus === 'completed')
-      if (this.filter === 'unfinished') return this.recentWorks.filter(w => w.displayStatus !== 'completed')
-      return this.recentWorks
+      if (this.filter === 'all') return this.works
+      return this.works.filter(w => w.status === this.filter)
     },
   },
+  mounted() {
+    this.loadUserInfo()
+    this.loadWorks()
+    this.loadOrders()
+  },
   methods: {
-    authHeaders() {
-      return { 'Authorization': 'Bearer ' + this.token }
-    },
-    async loadData() {
-      this.token = localStorage.getItem('token') || ''
-      if (!this.token) return
-      
+    async loadUserInfo() {
       try {
-        const r = await fetch('/api/v1/auth/me', { headers: this.authHeaders() }).then(r => r.json())
+        const token = localStorage.getItem('token')
+        if (!token) return
+        const r = await fetch('/api/v1/auth/me', {
+          headers: { 'Authorization': 'Bearer ' + token },
+        }).then(r => r.json())
         if (r.success) {
           this.username = r.data.username || ''
           this.userTier = r.data.tier || ''
         }
-      } catch (e) {}
-      
-      try {
-        const r = await fetch('/api/v1/billing/balance', { headers: this.authHeaders() }).then(r => r.json())
-        if (r.success) this.creditBalance = r.data?.balance || 0
-      } catch (e) {}
-      
-      try {
-        const r = await fetch('/api/v1/projects', { headers: this.authHeaders() }).then(r => r.json())
-        if (r.success && r.projects) {
-          this.worksCount = r.projects.length
-          this.recentWorks = r.projects.map(p => ({
-            id: p.id,
-            v2_pipeline_id: p.v2_pipeline_id || p.pipeline_id || '',
-            title: p.title,
-            createdAt: p.created ? new Date(p.created * 1000).toLocaleDateString('zh-CN') : '--',
-            statusText: { active: '进行中', processing: '进行中', completed: '已完成', draft: '草稿' }[p.status] || p.status,
-            displayStatus: p.status || 'active',
-          }))
-        }
-      } catch (e) {}
-      
-      try {
-        const r = await fetch('/api/v1/orders/my', { headers: this.authHeaders() }).then(r => r.json())
-        if (r.success && Array.isArray(r.data)) {
-          this.orders = r.data.map(o => ({
-            id: o.id,
-            order_no: o.order_no || o.no || o.id,
-            name: o.name || o.title || '充值',
-            type_text: o.type_text || '充值订单',
-            amount: o.amount ? '¥' + o.amount : '--',
-            duration: o.duration ? o.duration + '秒' : '--',
-            status: o.status || 'unknown',
-            status_text: { paid: '已支付', pending: '待支付', expired: '已过期', refunded: '已退款' }[o.status] || o.status,
-            status_class: o.status === 'paid' ? 'tag-green' : 'tag-muted',
-            created_at: o.created_at || o.createdAt || '--',
-          }))
-          this.ordersCount = r.data.length
-        }
+        const b = await fetch('/api/v1/billing/balance', {
+          headers: { 'Authorization': 'Bearer ' + token },
+        }).then(r => r.json())
+        if (b.success) this.creditBalance = b.data?.balance || 0
       } catch (e) {}
     },
-    async changePassword() {
-      if (this.pwdForm.new1 !== this.pwdForm.new2) { alert('两次密码不一致'); return }
+    async loadWorks() {
       try {
-        await axios.post('/api/v1/auth/change-password', this.pwdForm, { headers: this.authHeaders() })
-        alert('密码已修改')
-        this.showChangePwd = false
-      } catch (e) { alert('修改失败: ' + (e.message || e)) }
-    },
-    isCompleted(w) {
-      return w.displayStatus === 'completed'
-    },
-    continueWork(w) {
-      // V2 项目跳到 StudioPage，V1 项目跳到 TrackPage
-      if (w.v2_pipeline_id) {
-        this.$router.push('/create/pro?project_id=' + w.id + '&v2_pipeline_id=' + w.v2_pipeline_id)
-      } else {
-        this.$router.push('/track/' + w.id)
-      }
-    },
-    confirmDelete(w) {
-      this.deleteTarget = w
-      this.showDeleteConfirm = true
-    },
-    cancelDelete() {
-      this.showDeleteConfirm = false
-      this.deleteTarget = null
-    },
-    async deleteWork() {
-      if (!this.deleteTarget) return
-      try {
-        const r = await fetch('/api/v1/projects/' + this.deleteTarget.id, {
-          method: 'DELETE',
-          headers: this.authHeaders()
+        const token = localStorage.getItem('token')
+        if (!token) return
+        const r = await fetch('/api/v1/projects', {
+          headers: { 'Authorization': 'Bearer ' + token },
         }).then(r => r.json())
         if (r.success) {
-          this.recentWorks = this.recentWorks.filter(w => w.id !== this.deleteTarget.id)
-          alert('删除成功')
+          this.works = r.data || []
+          this.worksCount = this.works.length
+        }
+      } catch (e) {}
+    },
+    async loadOrders() {
+      try {
+        const token = localStorage.getItem('token')
+        if (!token) return
+        const r = await fetch('/api/v1/orders', {
+          headers: { 'Authorization': 'Bearer ' + token },
+        }).then(r => r.json())
+        if (r.success) {
+          this.orders = r.data || []
+          this.ordersCount = this.orders.length
+        }
+      } catch (e) {}
+    },
+    statusText(status) {
+      return { completed: '✅ 已完成', processing: '⏳ 进行中', failed: '❌ 失败' }[status] || status
+    },
+    async changePassword() {
+      if (!this.oldPwd || !this.newPwd || !this.confirmPwd) {
+        alert('请填写完整信息')
+        return
+      }
+      if (this.newPwd !== this.confirmPwd) {
+        alert('两次密码不一致')
+        return
+      }
+      try {
+        const token = localStorage.getItem('token')
+        const r = await fetch('/api/v1/auth/change-password', {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer ' + token,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ old_password: this.oldPwd, new_password: this.newPwd }),
+        }).then(r => r.json())
+        if (r.success) {
+          alert('密码修改成功')
+          this.showChangePwd = false
+          this.oldPwd = ''
+          this.newPwd = ''
+          this.confirmPwd = ''
         } else {
-          alert('删除失败: ' + (r.message || '未知错误'))
+          alert('修改失败: ' + (r.error || '未知错误'))
         }
       } catch (e) {
-        alert('删除失败')
+        alert('网络错误')
       }
-      this.showDeleteConfirm = false
-      this.deleteTarget = null
-    },
-    logout() {
-      localStorage.removeItem('token')
-      localStorage.removeItem('username')
-      this.$router.push('/login')
     },
   },
-  mounted() { this.loadData() },
 }
 </script>
 
 <style scoped>
 .profile-page {
+  min-height: 100vh;
+  background: var(--bg-primary, #0a0a0f);
+  color: var(--text-primary, #f0f0f5);
+  font-family: 'Inter', 'Noto Sans SC', -apple-system, sans-serif;
   padding: 24px;
-  max-width: 1200px;
-  margin: 0 auto;
 }
 
-/* 顶部用户信息 */
+/* Header */
 .profile-header {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-main);
-  border-radius: var(--radius);
-  padding: 24px;
-  margin-bottom: 24px;
+  display: flex; align-items: center; gap: 24px;
+  padding: 24px; background: var(--bg-card, #1a1a2e);
+  border: 1px solid var(--border, rgba(255,255,255,0.06));
+  border-radius: 16px; margin-bottom: 24px;
 }
-
-.profile-avatar {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 20px;
-}
-
+.profile-avatar { display: flex; align-items: center; gap: 16px; }
 .avatar-circle {
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  background: var(--blue);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 28px;
-  font-weight: 700;
-  flex-shrink: 0;
+  width: 64px; height: 64px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px; font-weight: 700; color: #fff;
 }
-
-.user-info {
-  flex: 1;
+.username { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+.user-tier .tag {
+  padding: 2px 10px; border-radius: 10px; font-size: 11px; font-weight: 600;
 }
+.tag-free { background: var(--bg-hover, rgba(255,255,255,0.04)); color: var(--text-muted, #6b6b80); }
+.tag-pro { background: rgba(196,155,74,0.1); color: #c49b4a; border: 1px solid rgba(196,155,74,0.3); }
+.tag-enterprise { background: rgba(99,102,241,0.1); color: #6366f1; border: 1px solid rgba(99,102,241,0.3); }
 
-.username {
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin-bottom: 4px;
-}
+.profile-stats { display: flex; gap: 32px; margin-left: auto; }
+.stat-item { text-align: center; }
+.stat-value { font-size: 24px; font-weight: 700; color: var(--gold, #c49b4a); }
+.stat-label { font-size: 12px; color: var(--text-muted, #6b6b80); margin-top: 4px; }
 
-.profile-stats {
-  display: flex;
-  gap: 32px;
-}
-
-.stat-item {
-  text-align: center;
-}
-
-.stat-value {
-  font-size: 24px;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin-bottom: 4px;
-}
-
-.stat-label {
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-/* 功能网格 */
+/* Grid */
 .profile-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 16px;
-  margin-bottom: 32px;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 16px; margin-bottom: 32px;
 }
-
 .grid-card {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-main);
-  border-radius: var(--radius);
-  padding: 24px;
-  cursor: pointer;
-  transition: all 0.2s;
-  position: relative;
+  padding: 20px; background: var(--bg-card, #1a1a2e);
+  border: 1px solid var(--border, rgba(255,255,255,0.06));
+  border-radius: 12px; cursor: pointer; transition: all 0.2s;
 }
+.grid-card:hover { border-color: var(--accent, #6366f1); transform: translateY(-2px); }
+.card-icon { font-size: 28px; margin-bottom: 12px; }
+.card-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+.card-desc { font-size: 12px; color: var(--text-muted, #6b6b80); }
+.card-arrow { font-size: 16px; color: var(--text-muted, #6b6b80); margin-top: 8px; }
 
-.grid-card:hover {
-  border-color: var(--blue);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(41, 123, 255, 0.15);
-}
-
-.card-icon {
-  font-size: 32px;
-  margin-bottom: 12px;
-}
-
-.card-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin-bottom: 8px;
-}
-
-.card-desc {
-  font-size: 12px;
-  color: var(--text-muted);
-  margin-bottom: 12px;
-}
-
-.card-arrow {
-  position: absolute;
-  top: 24px;
-  right: 24px;
-  font-size: 18px;
-  color: var(--text-muted);
-}
-
-/* 作品列表 */
-.works-section {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-main);
-  border-radius: var(--radius);
-  padding: 20px;
-  margin-bottom: 24px;
-}
-
-.section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-}
-
-.section-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.section-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
+/* Works Section */
+.section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.section-title { font-size: 18px; font-weight: 700; }
+.section-actions { display: flex; gap: 8px; }
 .filter-chip {
-  font-size: 12px;
-  padding: 4px 12px;
-  border-radius: 12px;
-  background: var(--bg-input);
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: all 0.2s;
+  padding: 4px 12px; border-radius: 16px; font-size: 12px;
+  background: var(--bg-hover, rgba(255,255,255,0.04));
+  border: 1px solid var(--border, rgba(255,255,255,0.06));
+  color: var(--text-muted, #6b6b80); cursor: pointer; transition: all 0.2s;
 }
+.filter-chip:hover, .filter-chip.active { background: var(--accent, #6366f1); color: #fff; border-color: var(--accent, #6366f1); }
 
-.filter-chip:hover, .filter-chip.active {
-  background: rgba(41, 123, 255, 0.1);
-  color: var(--blue);
-}
-
-.works-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
+.works-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
 .work-card {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px;
-  border-radius: var(--radius-sm);
-  transition: background 0.2s;
+  background: var(--bg-card, #1a1a2e); border: 1px solid var(--border, rgba(255,255,255,0.06));
+  border-radius: 12px; overflow: hidden; transition: all 0.2s;
+}
+.work-card:hover { border-color: var(--accent, #6366f1); }
+.work-thumb { height: 120px; background: var(--bg-primary, #0a0a0f); display: flex; align-items: center; justify-content: center; font-size: 36px; }
+.work-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.work-thumb.empty { color: var(--text-muted, #6b6b80); }
+.work-info { padding: 12px; }
+.work-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+.work-meta { font-size: 12px; color: var(--text-muted, #6b6b80); margin-bottom: 4px; }
+.work-status { font-size: 11px; padding: 2px 8px; border-radius: 8px; display: inline-block; }
+.work-status.completed { background: rgba(52,211,153,0.1); color: #34d399; }
+.work-status.processing { background: rgba(251,191,36,0.1); color: #fbbf24; }
+.work-status.failed { background: rgba(248,113,113,0.1); color: #f87171; }
+
+.empty-works {
+  grid-column: 1 / -1; text-align: center; padding: 48px 20px; color: var(--text-muted, #6b6b80);
+}
+.empty-works span { font-size: 48px; display: block; margin-bottom: 12px; }
+.btn-create {
+  padding: 10px 24px; background: var(--accent, #6366f1); color: #fff;
+  border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
 }
 
-.work-card:hover {
-  background: var(--bg-hover);
+/* Orders */
+.orders-list { display: flex; flex-direction: column; gap: 8px; }
+.order-item {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 16px; background: var(--bg-card, #1a1a2e);
+  border: 1px solid var(--border, rgba(255,255,255,0.06));
+  border-radius: 8px;
 }
+.order-info { flex: 1; }
+.order-id { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+.order-desc { font-size: 12px; color: var(--text-muted, #6b6b80); }
+.order-time { font-size: 11px; color: var(--text-muted, #6b6b80); }
+.order-amount { font-weight: 700; font-size: 14px; }
+.order-amount.paid { color: #34d399; }
+.order-amount.pending { color: #fbbf24; }
 
-.work-thumb {
-  width: 40px;
-  height: 40px;
-  border-radius: var(--radius-sm);
-  background: var(--bg-input);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 20px;
-  flex-shrink: 0;
-}
+.empty-orders { text-align: center; padding: 48px 20px; color: var(--text-muted, #6b6b80); }
+.empty-orders span { font-size: 48px; display: block; margin-bottom: 12px; }
 
-.work-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.work-name {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.work-meta {
-  font-size: 12px;
-  color: var(--text-muted);
-  margin-top: 2px;
-}
-
-.work-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.work-status {
-  font-size: 12px;
-  padding: 2px 8px;
-  border-radius: 12px;
-}
-
-.work-status.completed {
-  background: rgba(74, 222, 128, 0.1);
-  color: #4ade80;
-}
-
-.work-status.active, .work-status.processing {
-  background: rgba(41, 123, 255, 0.1);
-  color: var(--blue);
-}
-
-.work-status.draft {
-  background: rgba(245, 158, 11, 0.1);
-  color: #f59e0b;
-}
-
-.color-danger {
-  color: var(--danger);
-}
-
-/* 订单表格 */
-.orders-section {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-main);
-  border-radius: var(--radius);
-  padding: 20px;
-}
-
-.orders-table-wrap {
-  overflow-x: auto;
-}
-
-.orders-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-
-.orders-table th {
-  text-align: left;
-  padding: 10px 12px;
-  background: var(--bg-input);
-  color: var(--text-muted);
-  font-weight: 500;
-  border-bottom: 1px solid var(--border-main);
-  white-space: nowrap;
-}
-
-.orders-table td {
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--border-main);
-  color: var(--text-primary);
-}
-
-.orders-table tr:last-child td {
-  border-bottom: none;
-}
-
-.orders-table tbody tr:hover {
-  background: var(--bg-hover);
-}
-
-.order-id {
-  font-family: monospace;
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-.order-amount {
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.empty-row {
-  text-align: center;
-  color: var(--text-muted);
-  padding: 40px !important;
-}
-
-/* 弹窗 */
+/* Modal */
 .modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
+  position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+  display: flex; align-items: center; justify-content: center; z-index: 100;
 }
-
-.modal-panel {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-main);
-  border-radius: var(--radius);
-  width: 90%;
-  max-width: 400px;
+.modal {
+  background: var(--bg-card, #1a1a2e); border: 1px solid var(--border, rgba(255,255,255,0.06));
+  border-radius: 16px; padding: 24px; width: 400px; max-width: 90vw;
 }
-
-.modal-panel.sm {
-  max-width: 400px;
+.modal h3 { font-size: 18px; font-weight: 700; margin-bottom: 20px; }
+.form-group { margin-bottom: 16px; }
+.form-group label { display: block; font-size: 13px; color: var(--text-secondary, #a0a0b8); margin-bottom: 6px; }
+.form-group input {
+  width: 100%; padding: 10px 14px; background: var(--bg-input, #16162a);
+  border: 1px solid var(--border, rgba(255,255,255,0.06));
+  border-radius: 8px; color: var(--text-primary, #f0f0f5); font-size: 14px; outline: none;
 }
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--border-main);
+.form-group input:focus { border-color: var(--accent, #6366f1); }
+.modal-actions { display: flex; gap: 12px; margin-top: 20px; }
+.btn-cancel {
+  flex: 1; padding: 10px; background: var(--bg-hover, rgba(255,255,255,0.04));
+  border: 1px solid var(--border, rgba(255,255,255,0.06));
+  border-radius: 8px; color: var(--text-secondary, #a0a0b8); font-size: 14px; cursor: pointer;
 }
-
-.modal-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.modal-close {
-  background: none;
-  border: none;
-  font-size: 20px;
-  color: var(--text-muted);
-  cursor: pointer;
-  padding: 4px;
-}
-
-.modal-body {
-  padding: 20px;
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 16px 20px;
-  border-top: 1px solid var(--border-main);
-}
-
-.form-group {
-  margin-bottom: 16px;
-}
-
-.form-group:last-child {
-  margin-bottom: 0;
-}
-
-.form-label {
-  display: block;
-  font-size: 13px;
-  color: var(--text-secondary);
-  margin-bottom: 6px;
-}
-
-.input {
-  width: 100%;
-  padding: 10px 12px;
-  background: var(--bg-input);
-  border: 1px solid var(--border-main);
-  border-radius: var(--radius-sm);
-  color: var(--text-primary);
-  font-size: 14px;
-  outline: none;
-  transition: border-color 0.2s;
-}
-
-.input:focus {
-  border-color: var(--blue);
-}
-
-.btn {
-  padding: 8px 16px;
-  border-radius: var(--radius-sm);
-  font-size: 14px;
-  cursor: pointer;
-  transition: all 0.2s;
-  border: none;
-  font-weight: 500;
-}
-
-.btn-primary {
-  background: var(--blue);
-  color: #fff;
-}
-
-.btn-primary:hover {
-  opacity: 0.9;
-}
-
-.btn-ghost {
-  background: transparent;
-  color: var(--text-secondary);
-  border: 1px solid var(--border-main);
-}
-
-.btn-ghost:hover {
-  background: var(--bg-hover);
-}
-
-.btn-sm {
-  padding: 6px 12px;
-  font-size: 12px;
-}
-
-.btn-danger {
-  background: var(--danger);
-  color: #fff;
-}
-
-.btn-danger:hover {
-  opacity: 0.9;
-}
-
-.tag {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 12px;
-  font-size: 11px;
-  font-weight: 500;
-}
-
-.tag-blue {
-  background: rgba(41, 123, 255, 0.1);
-  color: var(--blue);
-}
-
-.tag-orange {
-  background: rgba(245, 158, 11, 0.1);
-  color: #f59e0b;
-}
-
-.tag-muted {
-  background: var(--bg-input);
-  color: var(--text-muted);
-}
-
-.tag-green {
-  background: rgba(74, 222, 128, 0.1);
-  color: #4ade80;
-}
-
-.hint {
-  font-size: 12px;
-  color: var(--text-muted);
-  margin-top: 8px;
-}
-
-.empty-hint {
-  padding: 40px;
-  text-align: center;
-  color: var(--text-muted);
-  font-size: 14px;
+.btn-confirm {
+  flex: 1; padding: 10px; background: var(--accent, #6366f1); color: #fff;
+  border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
 }
 
 @media (max-width: 768px) {
-  .profile-page {
-    padding: 16px;
-  }
-  
-  .profile-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  
-  .profile-stats {
-    gap: 16px;
-  }
-  
-  .stat-value {
-    font-size: 20px;
-  }
-  
-  .section-header {
-    flex-direction: column;
-    gap: 12px;
-    align-items: flex-start;
-  }
-  
-  .section-actions {
-    flex-wrap: wrap;
-  }
-  
-  .work-card {
-    flex-wrap: wrap;
-  }
-  
-  .work-actions {
-    width: 100%;
-    justify-content: flex-start;
-    margin-top: 8px;
-  }
+  .profile-header { flex-direction: column; text-align: center; }
+  .profile-stats { margin-left: 0; }
+  .profile-grid { grid-template-columns: repeat(2, 1fr); }
 }
 </style>
