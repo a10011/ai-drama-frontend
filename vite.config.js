@@ -5,6 +5,8 @@ import Components from 'unplugin-vue-components/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 import AutoImport from 'unplugin-auto-import/vite'
 
+const API_PROXY_TARGET = process.env.VITE_API_BASE_URL || 'https://api.mzsh.top'
+
 export default defineConfig({
   plugins: [
     vue(),
@@ -33,7 +35,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'https://api.mzsh.top',
+        target: API_PROXY_TARGET,
         changeOrigin: true
       }
     }
