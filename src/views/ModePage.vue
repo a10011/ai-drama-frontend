@@ -453,7 +453,7 @@
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#165DFF" stroke-width="1.5">
             <path d="M12 2l3 6h6l-4.5 5.5L18 20l-6-3.5L6 20l1.5-6.5L3 8h6z"/>
           </svg>
-          <span>会员创作权限</span>
+          <span>AI面剧场 · 全流程功能</span>
         </div>
         <div class="ws-glass-body">
           <div v-for="(p, i) in permissions" :key="i" class="ws-glass-perm" :class="{ disable: p.disabled }">
@@ -463,7 +463,8 @@
             <span>{{ p.label }}</span>
           </div>
         </div>
-        <button class="ws-glass-btn" @click="$router.push('/membership')">管理会员权益</button>
+        <!-- 会员权益仅作为增值服务入口，所有功能已对全部用户开放 -->
+        <button class="ws-glass-btn" @click="$router.push('/membership')">增值服务（可选）</button>
       </div>
 
       <!-- ===== 动态输入面板 ===== -->
@@ -769,8 +770,8 @@ export default {
         { label: '完整分镜导出', disabled: false },
         { label: '视频链接解析', disabled: false },
         { label: '多轨时间线预览', disabled: false },
-        { label: '4K 高清渲染', disabled: true },
-        { label: '商用授权', disabled: true },
+        { label: '4K 高清渲染', disabled: false },
+        { label: '商用授权', disabled: false },
       ]
     },
     highlighted() {
