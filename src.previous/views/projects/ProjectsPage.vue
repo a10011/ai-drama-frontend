@@ -266,7 +266,7 @@ const handleCommand = (command, item) => {
       }
       break
     case 'share':
-      const shareUrl = `https://ai.mzsh.top/drama/${item.id}`
+      const shareUrl = `https://mzsh.top/drama/${item.id}`
       navigator.clipboard.writeText(shareUrl)
       ElMessage.success('分享链接已复制')
       break
@@ -301,7 +301,7 @@ const connectWebSocket = () => {
   const token = localStorage.getItem('token')
   if (!token) return
 
-  const wsUrl = `wss://api.mzsh.top/ws?token=${token}`
+  const wsUrl = `wss://mzsh.top/ws?token=${token}`
   ws = new WebSocket(wsUrl)
 
   ws.onmessage = (event) => {

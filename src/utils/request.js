@@ -2,7 +2,7 @@ import axios from 'axios'
 import { ElMessage } from 'element-plus'
 
 const request = axios.create({
-  baseURL: '',
+  baseURL: 'https://api1.mzsh.top',
   timeout: 120000,
   headers: {
     'Content-Type': 'application/json'

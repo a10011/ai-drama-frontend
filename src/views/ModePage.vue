@@ -167,6 +167,68 @@
         </div>
       </template>
 
+
+      <!-- =============== 【参考视频模仿】=============== -->
+      <template v-if="mode === 'drama' && activeNav === 'ref-video'">
+        <div class="ws-full-center ws-ref-page">
+          <div v-if="!refVideoAnalyzed && !refVideoAnalyzing" class="ws-ref-upload-panel">
+            <div class="ws-ref-hero">
+              <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#165DFF" stroke-width="1.5" opacity="0.6">
+                <rect x="2" y="3" width="20" height="18" rx="3"/><polygon points="10,8 16,12 10,16"/>
+              </svg>
+              <p class="ws-empty-h1">参考视频模仿</p>
+              <p class="ws-empty-h2">上传一段你喜欢的视频，AI 会分析其中的镜头运动、剪辑节奏、转场技巧和结构框架，然后生成一份可模仿的拍摄方案。</p>
+            </div>
+
+            <div class="ws-ref-drop-zone" @click="$refs.refFileInput.click()">
+              <input type="file" accept="video/mp4,video/quicktime,video/x-msvideo,.mov,.avi,.mkv,.webm" style="display:none" ref="refFileInput" @change="onRefVideoSelect" />
+              <button class="ws-btn ws-btn-primary ws-btn-lg" :disabled="refVideoUploading">
+                <span v-if="refVideoUploading" class="ws-spin"></span>
+                <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+                {{ refVideoUploading ? '上传中...' : '上传参考视频' }}
+              </button>
+              <p class="ws-ref-hint">支持 MP4 / MOV / AVI / MKV / WebM，最大 200MB</p>
+            </div>
+
+            <div v-if="refVideoName" class="ws-ref-file-info">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22C55E" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+              <span>{{ refVideoName }}</span>
+              <button class="ws-btn ws-btn-ghost ws-btn-sm" @click.stop="resetRefVideo">移除</button>
+            </div>
+
+            <div v-if="refVideoName" class="ws-ref-title-row">
+              <label class="ws-lbl">作品标题（可选）</label>
+              <input class="ws-inp ws-ref-title-input" v-model="refVideoTitle" placeholder="例如：我的模仿短片" />
+            </div>
+
+            <button v-if="refVideoName && !refVideoUploading" class="ws-btn ws-btn-block ws-btn-wide" @click="analyzeRefVideo" :disabled="!refVideoUrl || refVideoAnalyzing">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+              {{ refVideoAnalyzing ? '分析中...' : '开始深度分析' }}
+            </button>
+          </div>
+
+          <div v-else-if="refVideoAnalyzing" class="ws-ref-analyzing">
+            <div class="ws-spin-big"></div>
+            <p class="ws-empty-h1">正在深度分析参考视频...</p>
+            <p class="ws-empty-h2">AI 正在逐帧解析镜头运动、剪辑节奏、转场技巧和结构框架</p>
+          </div>
+
+          <div v-else-if="refVideoAnalyzed" class="ws-ref-result">
+            <div class="ws-preview-bar">
+              <span class="ws-preview-tag">参考视频分析报告</span>
+              <button class="ws-btn ws-btn-ghost ws-btn-tiny" @click="resetRefVideo">重新选择</button>
+            </div>
+            <div v-if="refVideoResultText" class="ws-output-body ws-ref-result-text">{{ refVideoResultText }}</div>
+            <div class="ws-ref-actions">
+              <button class="ws-btn ws-btn-primary ws-btn-block ws-btn-lg" @click="createFromRefVideo" :disabled="creatingRef">
+                <span v-if="creatingRef" class="ws-spin"></span>
+                {{ creatingRef ? '创作中...' : '基于分析开始创作' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </template>
+
       <!-- =============== 【素材管理】 =============== -->
       <template v-if="mode === 'drama' && activeNav === 'media'">
         <div class="ws-media-root">
@@ -571,7 +633,7 @@
 </template>
 
 <script>
-import axios from 'axios'
+import request from '@/utils/request'
 
 const CONFIG = {
   drama: { title: '短剧创作', f2: '人物设定', f2ph: '菜鸟助理 x 神秘CEO', f3: '集数', f3ph: '12', ex: '现代都市甜宠', ph: '输入故事背景、时代设定、核心冲突……' },
@@ -607,6 +669,18 @@ export default {
       chatMsgs: [],
       chatLoading: false,
       exportType: 'script',
+
+      // 参考视频模仿
+      refVideoFile: null,
+      refVideoName: '',
+      refVideoUrl: '',
+      refVideoUploading: false,
+      refVideoAnalyzing: false,
+      refVideoAnalyzed: false,
+      refVideoAnalysis: {},
+      refVideoTitle: '',
+      refVideoGenre: '都市',
+      creatingRef: false,
     }
   },
   computed: {
@@ -642,6 +716,11 @@ export default {
           id: 'parse',
           icon: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>',
           label: '视频链接解析',
+        },
+        {
+          id: 'ref-video',
+          icon: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#165DFF" stroke-width="1.5"><rect x="2" y="3" width="20" height="18" rx="3"/><polygon points="10,8 16,12 10,16" fill="#165DFF"/><circle cx="12" cy="14" r="3" fill="none" stroke="#165DFF" stroke-width="1"/></svg>',
+          label: '参考视频模仿',
         },
         {
           id: 'media',
@@ -719,7 +798,7 @@ export default {
       this.shots = []
       try {
         const url = this.mode === 'drama' ? '/api/v1/hermes/quick' : '/api/v1/command'
-        const r = await axios.post(url, {
+        const r = await request.post(url, {
           type: this.mode === 'drama' ? 'script' : this.mode,
           prompt: this.prompt,
           subject: this.subject,
@@ -770,15 +849,97 @@ export default {
       ]
       return descs[index % descs.length]
     },
-    async parseVideo() {
+    onRefVideoSelect(e) {
+      const f = e.target.files[0]
+      if (!f) return
+      this.refVideoFile = f
+      this.refVideoName = f.name
+      this.refVideoUploading = true
+
+      const fd = new FormData()
+      fd.append('file', f)
+      request.post('/api/v2/reference-video/upload', fd, {
+        headers: { Authorization: 'Bearer ' + this.token },
+        timeout: 300000,
+      }).then(r => {
+        this.refVideoUrl = r.data?.data?.url || ''
+        if (!this.refVideoUrl) {
+          this.refVideoUrl = r.data?.data?.local_path || ''
+        }
+        this.refVideoUploading = false
+        this.refVideoName = r.data?.data?.file_name || f.name
+      }).catch(err => {
+        this.refVideoUploading = false
+        alert('上传失败: ' + (err.message || err))
+      })
+    },
+    async analyzeRefVideo() {
+      if (!this.refVideoUrl) return
+      this.refVideoAnalyzing = true
+      try {
+        const r = await request.post('/api/v2/director/analyze-video-url', {
+          video_url: this.refVideoUrl,
+          detail: 'deep',
+        }, { headers: this.auth(), timeout: 300000 })
+        if (r.data?.success) {
+          this.refVideoAnalyzed = true
+          const d = r.data.data || {}
+          this.refVideoResultText = d.analysis_text || d.data?.reference_prompt || JSON.stringify(d.data, null, 2).slice(0, 5000)
+          this.refVideoAnalysis = d
+        } else {
+          alert('分析失败: ' + (r.data?.error || '未知错误'))
+        }
+      } catch (e) {
+        alert('分析请求失败: ' + (e.message || e))
+      } finally {
+        this.refVideoAnalyzing = false
+      }
+    },
+    async createFromRefVideo() {
+      if (!this.refVideoAnalyzed || this.creatingRef) return
+      this.creatingRef = true
+      try {
+        const r = await request.post('/api/v2/reference-video/create-from-ref', {
+          title: this.refVideoTitle || '参考视频模仿作品',
+          genre: this.refVideoGenre,
+          analysis: this.refVideoAnalysis,
+          premise: this.prompt,
+        }, { headers: this.auth(), timeout: 180000 })
+        if (r.data?.success) {
+          alert('创作方案已生成！项目ID: ' + (r.data.project_id || '未知'))
+          this.$router.push('/projects')
+        } else {
+          alert('创作失败: ' + (r.data?.error || '未知错误'))
+        }
+      } catch (e) {
+        alert('创作失败: ' + (e.message || e))
+      } finally {
+        this.creatingRef = false
+      }
+    },
+    resetRefVideo() {
+      this.refVideoFile = null
+      this.refVideoName = ''
+      this.refVideoUrl = ''
+      this.refVideoAnalyzed = false
+      this.refVideoAnalyzing = false
+      this.refVideoAnalysis = {}
+      this.refVideoTitle = ''
+      this.prompt = ''
+      this.output = ''
+    },
+
+        async parseVideo() {
       if (!this.parseUrl.trim() || this.parsing) return
       this.parsing = true
       this.parsedResult = ''
       try {
-        const r = await axios.post('/api/v1/command', {
-          type: 'analyze',
-          url: this.parseUrl,
-          detail: this.parseDetail,
+        const r = await request.post('/api/v1/command', {
+          action: 'analyze',
+          params: {
+            url: this.parseUrl,
+            detail: this.parseDetail,
+          },
         }, { headers: this.auth(), timeout: 120000 })
         this.parsedResult = r.data?.data?.text || r.data?.script || JSON.stringify(r.data, null, 2)
       } catch (e) {
@@ -796,7 +957,7 @@ export default {
         if (!f) return
         const fd = new FormData()
         fd.append('file', f)
-        axios.post('/api/v1/media/upload', fd, {
+        request.post('/api/v1/media/upload', fd, {
           headers: { Authorization: 'Bearer ' + this.token },
           timeout: 120000,
         }).then(r => {
@@ -809,7 +970,7 @@ export default {
     },
     async loadMedia() {
       try {
-        const r = await axios.get('/api/v1/media/library', {
+        const r = await request.get('/api/v1/media/library', {
           headers: this.auth(),
           params: { limit: 20 },
         })
@@ -847,7 +1008,7 @@ export default {
       this.chatInput = ''
       this.chatLoading = true
       try {
-        const r = await axios.post('/api/v1/hermes/quick', {
+        const r = await request.post('/api/v1/hermes/quick', {
           prompt: msg,
           mode: 'chat',
           subject: this.subject,
@@ -868,7 +1029,7 @@ export default {
     },
     checkDialog() {
       if (!this.output) return
-      axios.post('/api/v1/command', {
+      request.post('/api/v1/command', {
         type: 'compliance',
         text: this.output,
       }, { headers: this.auth(), timeout: 30000 })
@@ -880,7 +1041,7 @@ export default {
     },
     save() {
       if (!this.output) return
-      axios.post('/api/v1/media/library/register', {
+      request.post('/api/v1/media/library/register', {
         name: this.mode + '-' + Date.now(),
         type: this.mode === 'drama' ? 'script_template' : this.mode,
         content: this.output,
@@ -2092,7 +2253,15 @@ export default {
 }
 
 .ws-main ::-webkit-scrollbar-track,
-.ws-nav-items::-webkit-scrollbar-track,
+.ws-nav-items::-webkit-scrollbar-track,    refVideoResultText() {
+      if (!this.refVideoAnalyzed) return ''
+      const d = this.refVideoAnalysis
+      if (d.data && d.data.reference_prompt) return d.data.reference_prompt
+      if (d.data && d.data.analysis_text) return d.data.analysis_text
+      if (d.data && d.data.raw_analysis) return d.data.raw_analysis
+      return ''
+    },
+    
 .ws-right::-webkit-scrollbar-track {
   background: transparent;
 }

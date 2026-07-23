@@ -73,7 +73,7 @@
 </template>
 
 <script>
-import axios from 'axios'
+import request from '@/utils/request'
 
 export default {
   data() {
@@ -135,7 +135,7 @@ export default {
       
       try {
         const token = localStorage.getItem('token') || localStorage.getItem('guest_token')
-        const resp = await axios.post('/api/v1/quick-create', {
+        const resp = await request.post('/api/v1/quick-create', {
           type: this.selectedType,
           title: this.title,
           prompt: this.prompt,
@@ -160,7 +160,7 @@ export default {
       const poll = async () => {
         try {
           const token = localStorage.getItem('token') || localStorage.getItem('guest_token')
-          const resp = await axios.get(`/api/v1/quick-create/${this.taskId}/progress`, {
+          const resp = await request.get(`/api/v1/quick-create/${this.taskId}/progress`, {
             headers: { Authorization: `Bearer ${token}` },
           })
           

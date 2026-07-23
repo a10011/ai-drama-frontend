@@ -5,7 +5,7 @@ import Components from 'unplugin-vue-components/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 import AutoImport from 'unplugin-auto-import/vite'
 
-const API_PROXY_TARGET = process.env.VITE_API_BASE_URL || 'https://api.mzsh.top'
+const API_PROXY_TARGET = process.env.VITE_API_BASE_URL || 'https://api1.mzsh.top'
 
 export default defineConfig({
   plugins: [

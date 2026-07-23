@@ -138,7 +138,7 @@
 </template>
 
 <script>
-import axios from 'axios'
+import request from '@/utils/request'
 
 export default {
   name: 'RegisterPage',
@@ -199,7 +199,7 @@ export default {
       this.registering = true
       
       try {
-        const resp = await axios.post('/api/register', {
+        const resp = await request.post('/api/register', {
           username: this.username.trim(),
           email: this.email.trim(),
           password: this.password,

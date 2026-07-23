@@ -112,7 +112,7 @@
 </template>
 
 <script>
-import axios from 'axios'
+import request from '@/utils/request'
 
 export default {
   name: 'LoginPage',
@@ -135,7 +135,7 @@ export default {
       this.logging = true
       
       try {
-        const resp = await axios.post('/api/login', {
+        const resp = await request.post('/api/login', {
           username: this.username.trim(),
           password: this.password,
         }, { timeout: 15000 })

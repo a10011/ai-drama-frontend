@@ -199,7 +199,7 @@
 </template>
 
 <script>
-import axios from 'axios'
+import request from '@/utils/request'
 import { marked } from 'marked'
 
 const API_BASE = '/api/v1/script-wf'
@@ -268,7 +268,7 @@ export default {
     async loadConversations() {
       try {
         const token = localStorage.getItem('token')
-        const resp = await axios.get(`${API_BASE}/conversations`, {
+        const resp = await request.get(`${API_BASE}/conversations`, {
           headers: { Authorization: `Bearer ${token}` }
         })
         if (resp.data?.success) {
@@ -287,7 +287,7 @@ export default {
     async switchConversation(id) {
       try {
         const token = localStorage.getItem('token')
-        const resp = await axios.get(`${API_BASE}/conversations/${id}`, {
+        const resp = await request.get(`${API_BASE}/conversations/${id}`, {
           headers: { Authorization: `Bearer ${token}` }
         })
         if (resp.data?.success) {
@@ -310,7 +310,7 @@ export default {
       
       try {
         const token = localStorage.getItem('token')
-        const resp = await axios.post(`${API_BASE}/chat/stream`, {
+        const resp = await request.post(`${API_BASE}/chat/stream`, {
           message,
           session_id: this.currentId,
           mode: this.chatMode,
@@ -429,7 +429,7 @@ export default {
       
       try {
         const token = localStorage.getItem('token')
-        const resp = await axios.post(`${API_BASE}/adapt`, {
+        const resp = await request.post(`${API_BASE}/adapt`, {
           script: this.adaptScript,
           model: this.writeModel,
         }, {

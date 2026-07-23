@@ -53,7 +53,7 @@
 </template>
 
 <script>
-import axios from 'axios'
+import request from '@/utils/request'
 
 export default {
   name: 'HistoryPage',
@@ -99,7 +99,7 @@ export default {
       this.token = localStorage.getItem('token') || ''
       if (!this.token) return
       try {
-        const r = await axios.get('/api/v1/projects?limit=50', { headers: this.authHeaders() })
+        const r = await request.get('/api/v1/projects?limit=50', { headers: this.authHeaders() })
         if (r.data.success && Array.isArray(r.data.data)) {
           this.projects = r.data.data.map(p => ({
             id: p.id,
@@ -130,7 +130,7 @@ export default {
     },
     async deleteItem(id) {
       try {
-        await axios.delete('/api/v1/projects/' + id, { headers: this.authHeaders() })
+        await request.delete('/api/v1/projects/' + id, { headers: this.authHeaders() })
         this.projects = this.projects.filter(p => p.id !== id)
       } catch (e) { /* ignore */ }
     },

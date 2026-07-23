@@ -18,12 +18,13 @@ const routes = [
   { path: "/market", name: "SharedMarket", component: () => import("@/views/market/SharedMarket.vue"), meta: { title: "灵感社区" } },
   { path: "/api-keys", name: "ApiKeys", component: () => import("@/views/ApiKeysPage.vue"), meta: { title: "API Key" } },
   { path: "/script-chat", name: "ScriptChat", component: () => import("@/views/ScriptChat.vue"), meta: { title: "写剧本" } },
+  { path: "/mode", name: "ModePage", component: () => import("@/views/ModePage.vue"), meta: { title: "短剧工作台" } },
 ]
 
 const router = createRouter({ history: createWebHistory(), routes })
 
 router.beforeEach((to, from, next) => {
-  const pub = ["/", "/login", "/register", "/create/pro", "/create", "/membership", "/payment", "/media", "/market", "/api-keys", "/script-chat", "/result"]
+  const pub = ["/", "/login", "/register", "/create/pro", "/create", "/membership", "/payment", "/media", "/market", "/api-keys", "/script-chat", "/result", "/mode"]
   const token = localStorage.getItem("token")
   if (!token && !pub.includes(to.path)) { next("/login") }
   else { next() }

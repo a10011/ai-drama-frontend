@@ -297,7 +297,7 @@ const connectWebSocket = () => {
   const token = localStorage.getItem('token')
   if (!token) return
 
-  const wsUrl = `wss://api.mzsh.top/ws?token=${token}`
+  const wsUrl = `wss://mzsh.top/ws?token=${token}`
   ws = new WebSocket(wsUrl)
 
   ws.onmessage = (event) => {
