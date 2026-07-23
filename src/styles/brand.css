@@ -1,0 +1,52 @@
+/* AI面剧场 - 品牌全局样式 */
+:root {
+  --fm-red: #E53935;
+  --fm-red-dark: #B71C1C;
+  --fm-red-light: #FF6F00;
+  --fm-gold: #FFD600;
+  --fm-dark: #0A0A0A;
+  --fm-surface: #141414;
+  --fm-card: #1A1A1A;
+  --fm-card-hover: #242424;
+  --fm-text: #FFFFFF;
+  --fm-text-muted: #9E9E9E;
+  --fm-border: #2A2A2A;
+  --fm-success: #4CAF50;
+  --fm-warning: #FF9800;
+  --fm-error: #F44336;
+  --font-primary: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  margin: 0;
+  font-family: var(--font-primary);
+  background: var(--fm-dark);
+  color: var(--fm-text);
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.6;
+}
+
+a { color: var(--fm-gold); text-decoration: none; transition: color 0.2s; }
+a:hover { color: white; }
+
+button {
+  cursor: pointer;
+  font-family: inherit;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--fm-dark);
+}
+::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}

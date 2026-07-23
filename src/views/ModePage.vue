@@ -7,7 +7,7 @@
         <span class="ws-brand-icon">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="2" y="2" width="20" height="20" rx="5" fill="#165DFF"/><path d="M8 8h8v1.5H8zm0 4h6v1.5H8zm0 4h4v1.5H8z" fill="#fff"/></svg>
         </span>
-        <span class="ws-brand-name">短剧工作台</span>
+        <span class="ws-brand-name">AI面剧场 · 短剧</span>
       </div>
 
       <div class="ws-nav-items">
@@ -2248,15 +2248,7 @@ export default {
 }
 
 .ws-main ::-webkit-scrollbar-track,
-.ws-nav-items::-webkit-scrollbar-track,    refVideoResultText() {
-      if (!this.refVideoAnalyzed) return ''
-      const d = this.refVideoAnalysis
-      if (d.data && d.data.reference_prompt) return d.data.reference_prompt
-      if (d.data && d.data.analysis_text) return d.data.analysis_text
-      if (d.data && d.data.raw_analysis) return d.data.raw_analysis
-      return ''
-    },
-    
+.ws-nav-items::-webkit-scrollbar-track,
 .ws-right::-webkit-scrollbar-track {
   background: transparent;
 }

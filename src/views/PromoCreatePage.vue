@@ -1,82 +1,59 @@
 <template>
-  <div class="promo-create-page">
-    <div class="page-header">
-      <h1>🎥 宣传片创作</h1>
-      <p class="subtitle">AI 驱动，快速生成专业级宣传视频</p>
-    </div>
-    
-    <div class="content-area">
-      <!-- 宣传片类型选择 -->
-      <div class="promo-types">
-        <div class="type-card active" @click="selectedType = 'company'">
-          <span class="type-icon">🏢</span>
-          <h3>企业形象</h3>
-          <p>展示公司文化和实力</p>
+  <div class="fm-promo-create">
+    <header class="fm-promo-header">
+      <h1 class="fm-promo-title">🎥 企业宣传片制作</h1>
+      <p class="fm-promo-desc">企业形象 · 品牌推广 · 招生招生 · 产品展示</p>
+    </header>
+
+    <div class="fm-promo-body">
+      <div class="fm-promo-form">
+        <div class="fm-form-row">
+          <div class="fm-form-group">
+            <label>企业/品牌名称</label>
+            <input v-model="companyName" class="fm-input" placeholder="例如：XX科技有限公司"/>
+          </div>
+          <div class="fm-form-group">
+            <label>宣传类型</label>
+            <select v-model="promoType" class="fm-select">
+              <option value="企业形象">企业形象</option>
+              <option value="产品发布">产品发布</option>
+              <option value="招生招生">招生招生</option>
+              <option value="年度总结">年度总结</option>
+              <option value="品牌故事">品牌故事</option>
+            </select>
+          </div>
         </div>
-        <div class="type-card" @click="selectedType = 'product'">
-          <span class="type-icon">📱</span>
-          <h3>产品介绍</h3>
-          <p>详细介绍产品功能</p>
-        </div>
-        <div class="type-card" @click="selectedType = 'event'">
-          <span class="type-icon">🎪</span>
-          <h3>活动宣传</h3>
-          <p>发布会和活动预告</p>
-        </div>
-      </div>
-      
-      <!-- 输入区域 -->
-      <div class="input-section">
-        <div class="form-group">
-          <label>宣传主题</label>
-          <input v-model="title" placeholder="输入宣传主题" />
-        </div>
-        <div class="form-group">
+
+        <div class="fm-form-group">
           <label>核心信息</label>
-          <textarea v-model="message" placeholder="描述您想要传达的核心信息..." rows="4"></textarea>
+          <textarea v-model="coreMessage" class="fm-textarea" rows="4" placeholder="你的宣传片要传达什么核心信息？"></textarea>
         </div>
-        <div class="form-group">
-          <label>目标受众</label>
-          <select v-model="audience">
-            <option value="customer">客户</option>
-            <option value="investor">投资者</option>
-            <option value="employee">员工</option>
-            <option value="public">公众</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>视频时长</label>
-          <select v-model="duration">
-            <option value="30">30秒</option>
-            <option value="60">60秒</option>
-            <option value="120">2分钟</option>
-          </select>
-        </div>
-        <button class="generate-btn" @click="generatePromo" :disabled="!isValid">
-          <span v-if="loading">⏳ 生成中...</span>
-          <span v-else>🎬 生成宣传片</span>
-        </button>
-      </div>
-      
-      <!-- 生成结果 -->
-      <div class="result-section" v-if="result">
-        <div class="result-header">
-          <h3>生成结果</h3>
-          <button class="btn-download" @click="downloadResult">📥 下载</button>
-        </div>
-        <div class="result-content">
-          <div class="result-preview">
-            <video v-if="result.video_url" :src="result.video_url" controls class="preview-video"></video>
-            <div v-else class="preview-placeholder">
-              <span>🎬</span>
-              <p>视频生成中...</p>
+
+        <div class="fm-form-group">
+          <label>视觉风格</label>
+          <div class="fm-style-grid">
+            <div v-for="s in promoStyles" :key="s.value" class="fm-style-card" :class="{ active: selectedStyle === s.value }" @click="selectedStyle = s.value">
+              <div class="fm-style-preview" :style="{ background: s.gradient }"></div>
+              <div class="fm-style-name">{{ s.name }}</div>
             </div>
           </div>
-          <div class="result-details">
-            <h4>宣传脚本</h4>
-            <pre class="script-text">{{ result.script }}</pre>
+        </div>
+
+        <div class="fm-form-group">
+          <label>时长偏好</label>
+          <div class="fm-duration-options">
+            <span v-for="d in durations" :key="d" class="fm-duration-tag" :class="{ active: duration === d }" @click="duration = d">{{ d }}</span>
           </div>
         </div>
+
+        <button class="fm-generate-btn" @click="generate" :disabled="loading">
+          {{ loading ? '生成中...' : '生成宣传片方案' }}
+        </button>
+      </div>
+
+      <div v-if="result" class="fm-result-panel">
+        <h2>宣传片方案</h2>
+        <pre>{{ result }}</pre>
       </div>
     </div>
   </div>
@@ -86,301 +63,80 @@
 export default {
   data() {
     return {
-      selectedType: 'company',
-      title: '',
-      message: '',
-      audience: 'customer',
-      duration: '60',
+      companyName: '',
+      promoType: '企业形象',
+      coreMessage: '',
+      selectedStyle: 'corporate',
+      duration: '60秒',
       loading: false,
-      result: null,
-    }
-  },
-  computed: {
-    isValid() {
-      return this.title.trim() && this.message.trim()
-    },
-    typeLabel() {
-      const labels = { company: '企业形象', product: '产品介绍', event: '活动宣传' }
-      return labels[this.selectedType] || ''
+      result: '',
+      promoStyles: [
+        { value: 'corporate', name: '商务专业', gradient: 'linear-gradient(135deg, #1a1a2e, #16213e)' },
+        { value: 'warm', name: '温馨家庭', gradient: 'linear-gradient(135deg, #ffecd2, #fcb69f)' },
+        { value: 'tech', name: '科技未来', gradient: 'linear-gradient(135deg, #667eea, #764ba2)' },
+        { value: 'energetic', name: '活力动感', gradient: 'linear-gradient(135deg, #E53935, #FF6F00)' },
+      ],
+      durations: ['30秒', '60秒', '3分钟', '5分钟', '10分钟']
     }
   },
   methods: {
-    async generatePromo() {
-      this.loading = true
-      this.result = null
-      
+    async generate() {
+      this.loading = true;
       try {
-        // 这里应该调用后端 API
-        // const response = await fetch('/api/v1/promo/create', {
-        //   method: 'POST',
-        //   headers: { 'Content-Type': 'application/json' },
-        //   body: JSON.stringify({
-        //     type: this.selectedType,
-        //     title: this.title,
-        //     message: this.message,
-        //     audience: this.audience,
-        //     duration: this.duration,
-        //   }),
-        // })
-        // const data = await response.json()
-        // this.result = data
-        
-        // 模拟生成
+        const body = { company: this.companyName, type: this.promoType, message: this.coreMessage, style: this.selectedStyle, duration: this.duration };
+        // TODO: Call backend API
         setTimeout(() => {
-          this.result = {
-            script: `[宣传脚本]\n主题: ${this.title}\n类型: ${this.typeLabel}\n时长: ${this.duration}秒\n\n[开场]\n展示公司实力和产品优势\n\n[主体]\n详细介绍产品和品牌价值\n\n[结尾]\n呼吁行动，展示联系方式`,
-            video_url: '',
-          }
-          this.loading = false
-        }, 2000)
-      } catch (error) {
-        alert('生成失败: ' + error.message)
-        this.loading = false
+          this.result = '这是生成的宣传片方案...';
+          this.loading = false;
+        }, 2000);
+      } catch(e) {
+        this.result = '生成失败：' + e.message;
+        this.loading = false;
       }
-    },
-    
-    downloadResult() {
-      if (this.result && this.result.video_url) {
-        window.open(this.result.video_url, '_blank')
-      } else {
-        // 下载脚本
-        const blob = new Blob([this.result.script], { type: 'text/plain' })
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `${this.title}_宣传脚本.txt`
-        a.click()
-        URL.revokeObjectURL(url)
-      }
-    },
-  },
+    }
+  }
 }
 </script>
 
 <style scoped>
-.promo-create-page {
-  min-height: 100vh;
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  font-family: 'Inter', 'Noto Sans SC', -apple-system, sans-serif;
+.fm-promo-create { background: #0A0A0A; min-height: 100vh; color: white; padding-bottom: 60px; }
+.fm-promo-header {
+  padding: 40px 24px; text-align: center; border-bottom: 1px solid #2A2A2A;
+  background: linear-gradient(180deg, rgba(245,158,11,0.08), transparent);
 }
-
-.page-header {
-  text-align: center;
-  padding: 40px 20px;
-  background: linear-gradient(135deg, rgba(99,102,241,0.1) 0%, rgba(139,92,246,0.05) 100%);
+.fm-promo-title { font-size: 36px; font-weight: 800; margin-bottom: 8px; }
+.fm-promo-desc { color: #9E9E9E; font-size: 16px; }
+.fm-promo-body { max-width: 1000px; margin: 0 auto; padding: 40px 24px; }
+.fm-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.fm-form-group { margin-bottom: 30px; }
+.fm-form-group label { display: block; font-size: 15px; font-weight: 600; margin-bottom: 12px; color: #E0E0E0; }
+.fm-input, .fm-select, .fm-textarea {
+  width: 100%; padding: 14px 18px; background: #141414; border: 1px solid #2A2A2A;
+  border-radius: 10px; color: white; font-size: 15px; outline: none; font-family: inherit;
 }
-
-.page-header h1 {
-  font-size: 32px;
-  font-weight: 800;
-  margin-bottom: 8px;
+.fm-textarea { resize: vertical; }
+.fm-select { appearance: none; background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23999"><path d="M7 10l5 5 5-5z"/></svg>'); background-repeat: no-repeat; background-position: right 14px; padding-right: 40px; }
+.fm-style-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
+.fm-style-card {
+  background: #1A1A1A; border-radius: 12px; overflow: hidden; border: 2px solid #2A2A2A;
+  cursor: pointer; transition: all 0.2s;
 }
-
-.subtitle {
-  font-size: 16px;
-  color: var(--text-secondary);
+.fm-style-card:hover, .fm-style-card.active { border-color: #F59E0B; }
+.fm-style-preview { height: 100px; }
+.fm-style-name { padding: 12px 16px; font-size: 15px; font-weight: 600; text-align: center; }
+.fm-duration-options { display: flex; flex-wrap: wrap; gap: 10px; }
+.fm-duration-tag {
+  padding: 8px 18px; border-radius: 20px; background: #1A1A1A; border: 1px solid #2A2A2A;
+  font-size: 14px; cursor: pointer; transition: all 0.2s;
 }
-
-.content-area {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 40px 20px;
+.fm-duration-tag:hover, .fm-duration-tag.active { border-color: #F59E0B; background: rgba(245,158,11,0.15); }
+.fm-generate-btn {
+  width: 100%; padding: 16px; background: linear-gradient(135deg, #F59E0B, #FCD34D); color: #000;
+  border: none; border-radius: 12px; font-size: 17px; font-weight: 700; cursor: pointer; transition: all 0.2s;
 }
-
-/* 宣传片类型选择 */
-.promo-types {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 16px;
-  margin-bottom: 40px;
-}
-
-.type-card {
-  padding: 24px;
-  background: var(--bg-card);
-  border: 2px solid var(--border);
-  border-radius: 16px;
-  text-align: center;
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
-.type-card:hover {
-  border-color: var(--accent);
-  transform: translateY(-2px);
-}
-
-.type-card.active {
-  border-color: var(--accent);
-  background: rgba(99,102,241,0.1);
-}
-
-.type-icon {
-  font-size: 32px;
-  display: block;
-  margin-bottom: 12px;
-}
-
-.type-card h3 {
-  font-size: 16px;
-  font-weight: 700;
-  margin-bottom: 6px;
-}
-
-.type-card p {
-  font-size: 13px;
-  color: var(--text-muted);
-}
-
-/* 输入区域 */
-.input-section {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 24px;
-  margin-bottom: 40px;
-}
-
-.form-group {
-  margin-bottom: 20px;
-}
-
-.form-group label {
-  display: block;
-  font-size: 14px;
-  font-weight: 600;
-  margin-bottom: 6px;
-  color: var(--text-secondary);
-}
-
-.form-group input,
-.form-group textarea,
-.form-group select {
-  width: 100%;
-  padding: 12px 16px;
-  background: var(--bg-input);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--text-primary);
-  font-size: 14px;
-  outline: none;
-  transition: border-color 0.2s;
-}
-
-.form-group input:focus,
-.form-group textarea:focus,
-.form-group select:focus {
-  border-color: var(--accent);
-}
-
-.form-group textarea {
-  resize: vertical;
-  font-family: inherit;
-}
-
-.generate-btn {
-  width: 100%;
-  padding: 14px;
-  background: linear-gradient(135deg, #c49b4a, #d4b35a);
-  color: #fff;
-  border: none;
-  border-radius: 12px;
-  font-size: 16px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.generate-btn:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(196,155,74,0.3);
-}
-
-.generate-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* 结果区域 */
-.result-section {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 24px;
-}
-
-.result-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
-
-.result-header h3 {
-  font-size: 18px;
-  font-weight: 700;
-}
-
-.btn-download {
-  padding: 8px 16px;
-  background: var(--accent);
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.result-content {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 24px;
-}
-
-.preview-video {
-  width: 100%;
-  border-radius: 12px;
-}
-
-.preview-placeholder {
-  width: 100%;
-  height: 200px;
-  background: var(--bg-primary);
-  border-radius: 12px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-muted);
-}
-
-.preview-placeholder span {
-  font-size: 48px;
-  margin-bottom: 12px;
-}
-
-.script-text {
-  background: var(--bg-primary);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 16px;
-  font-size: 13px;
-  line-height: 1.6;
-  white-space: pre-wrap;
-  color: var(--text-secondary);
-  max-height: 300px;
-  overflow-y: auto;
-}
-
-@media (max-width: 768px) {
-  .result-content {
-    grid-template-columns: 1fr;
-  }
-  
-  .promo-types {
-    grid-template-columns: 1fr;
-  }
-}
+.fm-generate-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(245,158,11,0.3); }
+.fm-result-panel { margin-top: 40px; padding: 30px; background: #1A1A1A; border-radius: 16px; border: 1px solid #2A2A2A; }
+.fm-result-panel h2 { margin-bottom: 20px; }
+.fm-result-panel pre { white-space: pre-wrap; line-height: 1.8; color: #E0E0E0; }
+@media (max-width: 768px) { .fm-form-row { grid-template-columns: 1fr; } }
 </style>

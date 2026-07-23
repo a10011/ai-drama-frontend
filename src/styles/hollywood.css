@@ -4,6 +4,16 @@
    ═══════════════════════════════════════════ */
 
 :root {
+  --brand-primary: #E53935;       /* AI面剧场红色主色 */
+  --brand-secondary: #FF6F00;      /* 金橙辅助 */
+  --brand-bg: #0D0D0D;             /* 深色背景 */
+  --brand-surface: #1A1A1A;        /* 卡片背景 */
+  --brand-text: #FFFFFF;
+  --brand-text-muted: #B0B0B0;
+  --brand-accent: #FFD600;         /* 金色点缀 */
+  --brand-border: #333333;
+}
+ {
   --bg-primary: #1E1E2E;
   --bg-card: #252536;
   --bg-input: #1A1A2E;

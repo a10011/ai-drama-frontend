@@ -1,300 +1,168 @@
 <template>
-  <div class="home-page">
-    <!-- Hero 渐变区 -->
-    <section class="hero">
-      <div class="hero-bg">
-        <div class="hero-orb orb-1"></div>
-        <div class="hero-orb orb-2"></div>
-        <div class="hero-orb orb-3"></div>
+  <div class="fm-home">
+    <!-- Header -->
+    <header class="fm-home-header">
+      <div class="fm-home-header-inner">
+        <div class="fm-home-brand">
+          <span class="fm-home-logo">🎬</span>
+          <span class="fm-home-name">AI面剧场</span>
+        </div>
+        <nav class="fm-home-nav">
+          <router-link to="/create" class="fm-nav-item">短剧</router-link>
+          <router-link to="/script-chat" class="fm-nav-item">写剧本</router-link>
+          <router-link to="/create/ad" class="fm-nav-item">广告片</router-link>
+          <router-link to="/projects" class="fm-nav-item">我的作品</router-link>
+        </nav>
       </div>
+    </header>
 
-      <div class="hero-content">
-        <h1 class="hero-title">🎬 AI 短剧创作平台</h1>
-        <p class="hero-sub">粘贴剧本 → 提交导演 → 自动制作短剧、广告片、宣传片</p>
-
-        <div class="hero-search">
-          <input
-            v-model="prompt"
-            class="hero-input"
-            placeholder="输入你的创意，例如：一个社畜在深夜加班时发现自己养的绿植会说话..."
-            @keyup.enter="goCreate"
-          />
-          <button class="hero-btn" @click="goCreate">开始创作</button>
+    <!-- Hero -->
+    <section class="fm-hero">
+      <div class="fm-hero-bg">
+        <div class="fm-orb orb-1"></div>
+        <div class="fm-orb orb-2"></div>
+        <div class="fm-orb orb-3"></div>
+      </div>
+      <div class="fm-hero-content">
+        <h1 class="fm-hero-title">AI面剧场</h1>
+        <p class="fm-hero-sub">用 AI 讲好每一个故事</p>
+        <p class="fm-hero-desc">短视频时代，一个人就是一支制作团队</p>
+        <div class="fm-hero-search">
+          <input v-model="prompt" class="fm-hero-input" placeholder="输入你的创意..." @keyup.enter="goCreate"/>
+          <button class="fm-hero-btn" @click="goCreate">开始创作</button>
         </div>
       </div>
     </section>
 
-    <!-- 创作类型 -->
-    <section class="main-section">
-      <h2 class="section-title">选择创作类型</h2>
-      <div class="creation-types">
-        <div class="type-card" @click="$router.push('/create')">
-          <div class="type-icon">🎬</div>
-          <div class="type-title">短剧</div>
-          <div class="type-desc">多集连续剧，完整故事线</div>
+    <!-- 业务卡片 -->
+    <section class="fm-cards-section">
+      <h2 class="fm-section-title">选择你的创作方向</h2>
+      <div class="fm-card-grid">
+        <div class="fm-card fm-card-drama" @click="$router.push('/mode')">
+          <div class="fm-card-icon">🎬</div>
+          <h3>短剧工作台</h3>
+          <p>多集连续剧 · 完整剧本 · 角色建模 · 分镜视频</p>
         </div>
-        <div class="type-card" @click="$router.push('/create')">
-          <div class="type-icon">📢</div>
-          <div class="type-title">广告片</div>
-          <div class="type-desc">产品宣传，商业推广</div>
+        <div class="fm-card fm-card-script" @click="$router.push('/script-chat')">
+          <div class="fm-card-icon">✍️</div>
+          <h3>写剧本</h3>
+          <p>AI 对话式创作 · 快速产出 · 自动质检</p>
         </div>
-        <div class="type-card" @click="$router.push('/create')">
-          <div class="type-icon">🎥</div>
-          <div class="type-title">宣传片</div>
-          <div class="type-desc">企业形象，品牌宣传</div>
+        <div class="fm-card fm-card-ad" @click="$router.push('/create/ad')">
+          <div class="fm-card-icon">📺</div>
+          <h3>广告片</h3>
+          <p>产品展示 · 品牌形象 · 商业推送</p>
         </div>
-        <div class="type-card" @click="$router.push('/script-chat')">
-          <div class="type-icon">✍️</div>
-          <div class="type-title">写剧本</div>
-          <div class="type-desc">AI 辅助，创意写作</div>
+        <div class="fm-card fm-card-promo" @click="$router.push('/create/promo')">
+          <div class="fm-card-icon">🎥</div>
+          <h3>宣传片</h3>
+          <p>企业形象 · 品牌推广 · 招生招生</p>
         </div>
-      </div>
-    </section>
-
-    <!-- 快速入口 -->
-    <section class="main-section">
-      <h2 class="section-title">快速入口</h2>
-      <div class="quick-grid">
-        <div class="access-card" @click="$router.push('/projects')">
-          <div class="access-icon">🎬</div>
-          <div>
-            <h3>我的作品</h3>
-            <p>查看所有短剧项目</p>
-          </div>
-        </div>
-        <div class="access-card" @click="$router.push('/payment')">
-          <div class="access-icon">💰</div>
-          <div>
-            <h3>充值中心</h3>
-            <p>会员套餐、点数充值</p>
-          </div>
-        </div>
-        <div class="access-card" @click="$router.push('/media')">
-          <div class="access-icon">🖼️</div>
-          <div>
-            <h3>素材库</h3>
-            <p>图片、音频、视频管理</p>
-          </div>
+        <div class="fm-card fm-card-ref" @click="$router.push('/create/ref-video')">
+          <div class="fm-card-icon">🎞️</div>
+          <h3>参考视频模仿</h3>
+          <p>上传视频 · AI 分析镜头技巧 · 生成模仿方案</p>
         </div>
       </div>
     </section>
 
-    <!-- 样片展示 -->
-    <section class="main-section samples-section">
-      <h2 class="section-title">样片展示</h2>
-      <div class="sample-tabs">
-        <button
-          v-for="tab in sampleTabs"
-          :key="tab.value"
-          :class="['sample-tab', { active: activeTab === tab.value }]"
-          @click="activeTab = tab.value"
-        >{{ tab.label }}</button>
-      </div>
-
-      <div v-show="activeTab === 'short'" class="samples-grid">
-        <div class="sample-card" v-for="item in shortSamples" :key="item.name">
-          <div class="sample-thumb" :style="{ background: item.gradient }">{{ item.icon }}</div>
-          <div class="sample-info">
-            <div class="sample-title">{{ item.name }}</div>
-            <div class="sample-meta">{{ item.desc }}</div>
-          </div>
-        </div>
-      </div>
-      <div v-show="activeTab === 'ad'" class="samples-grid">
-        <div class="sample-card" v-for="item in adSamples" :key="item.name">
-          <div class="sample-thumb" :style="{ background: item.gradient }">{{ item.icon }}</div>
-          <div class="sample-info">
-            <div class="sample-title">{{ item.name }}</div>
-            <div class="sample-meta">{{ item.desc }}</div>
-          </div>
-        </div>
-      </div>
-      <div v-show="activeTab === 'promo'" class="samples-grid">
-        <div class="sample-card" v-for="item in promoSamples" :key="item.name">
-          <div class="sample-thumb" :style="{ background: item.gradient }">{{ item.icon }}</div>
-          <div class="sample-info">
-            <div class="sample-title">{{ item.name }}</div>
-            <div class="sample-meta">{{ item.desc }}</div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- 底部 -->
-    <footer class="footer">
-      <p>© 2026 AI 短剧创作平台 · 让创作更简单</p>
+    <!-- Footer -->
+    <footer class="fm-footer">
+      <p>© 2026 福建面子信息科技有限公司 · All rights reserved</p>
     </footer>
   </div>
 </template>
 
 <script>
 export default {
-  data() {
-    return {
-      prompt: '',
-      activeTab: 'short',
-      sampleTabs: [
-        { label: '短剧', value: 'short' },
-        { label: '广告片', value: 'ad' },
-        { label: '宣传片', value: 'promo' },
-      ],
-      shortSamples: [
-        { name: '都市情感短剧 - 第1集', desc: '2026-07-20 · 5分钟', icon: '🎬', gradient: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)' },
-        { name: '古装穿越短剧 - 第1集', desc: '2026-07-19 · 8分钟', icon: '🎬', gradient: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)' },
-        { name: '科幻悬疑短剧 - 第1集', desc: '2026-07-18 · 6分钟', icon: '🎬', gradient: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)' },
-      ],
-      adSamples: [
-        { name: '手机产品广告', desc: '30秒 · 高清', icon: '📢', gradient: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)' },
-        { name: '食品品牌广告', desc: '15秒 · 竖屏', icon: '📢', gradient: 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)' },
-        { name: '汽车广告片', desc: '60秒 · 4K', icon: '📢', gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' },
-      ],
-      promoSamples: [
-        { name: '企业年度宣传片', desc: '3分钟 · 4K', icon: '🎥', gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' },
-        { name: '旅游城市宣传片', desc: '2分钟 · 横屏', icon: '🎥', gradient: 'linear-gradient(135deg, #f5af19 0%, #f12711 100%)' },
-        { name: '学校招生宣传片', desc: '4分钟 · 横屏', icon: '🎥', gradient: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)' },
-      ],
-    }
-  },
+  data() { return { prompt: '' } },
   methods: {
     goCreate() {
-      if (this.prompt.trim()) {
-        this.$router.push('/create?prompt=' + encodeURIComponent(this.prompt))
-      } else {
-        this.$router.push('/create')
-      }
-    },
+      this.$router.push('/create' + (this.prompt ? '?prompt=' + encodeURIComponent(this.prompt) : ''))
+    }
   }
 }
 </script>
 
 <style scoped>
-.home-page {
-  background: #f5f7fa;
-  color: #1e293b;
-  font-family: 'Inter', 'Noto Sans SC', -apple-system, sans-serif;
-}
+.fm-home { background: #0A0A0A; min-height: 100vh; color: white; font-family: -apple-system, BlinkMacSystemFont, 'Noto Sans SC', sans-serif; }
 
-/* ===== Hero ===== */
-.hero {
-  background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
-  color: white;
-  padding: 80px 30px;
-  text-align: center;
-  position: relative;
-  overflow: hidden;
+/* Header */
+.fm-home-header {
+  position: sticky; top: 0; z-index: 50; background: rgba(10,10,10,0.95); border-bottom: 1px solid #2A2A2A; backdrop-filter: blur(20px);
 }
+.fm-home-header-inner {
+  max-width: 1400px; margin: 0 auto; padding: 12px 24px; display: flex; align-items: center; justify-content: space-between;
+}
+.fm-home-brand { display: flex; align-items: center; gap: 8px; cursor: pointer; text-decoration: none; }
+.fm-home-logo { font-size: 28px; }
+.fm-home-name {
+  font-size: 20px; font-weight: 800; letter-spacing: 1px;
+  background: linear-gradient(90deg, #ff6b35, #E53935, #FFD600);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.fm-home-nav { display: flex; gap: 4px; }
+.fm-nav-item { color: #9E9E9E; text-decoration: none; padding: 8px 14px; border-radius: 8px; font-size: 14px; transition: all 0.2s; }
+.fm-nav-item:hover { color: white; background: rgba(229,57,53,0.15); }
 
-.hero-bg { position: absolute; inset: 0; overflow: hidden; }
+/* Hero */
+.fm-hero {
+  background: linear-gradient(180deg, #1a0000 0%, #0A0A0A 60%);
+  padding: 100px 24px 80px; text-align: center; position: relative; overflow: hidden;
+}
+.fm-hero-bg { position: absolute; inset: 0; overflow: hidden; }
+.fm-orb { position: absolute; border-radius: 50%; filter: blur(80px); opacity: 0.3; }
+.orb-1 { width: 600px; height: 600px; background: #E53935; top: -300px; right: -100px; }
+.orb-2 { width: 400px; height: 400px; background: #FF6F00; bottom: -200px; left: -100px; }
+.orb-3 { width: 300px; height: 300px; background: #FFD600; top: 40%; left: 50%; transform: translate(-50%, -50%); opacity: 0.15; }
+.fm-hero-content { position: relative; z-index: 1; max-width: 900px; margin: 0 auto; }
+.fm-hero-title { font-size: 72px; font-weight: 900; margin-bottom: 12px; letter-spacing: 2px; }
+.fm-hero-sub { font-size: 32px; color: #FFD600; margin-bottom: 12px; font-weight: 700; }
+.fm-hero-desc { font-size: 18px; color: #9E9E9E; margin-bottom: 40px; }
+.fm-hero-search { display: flex; gap: 0; max-width: 700px; margin: 0 auto; border-radius: 16px; overflow: hidden; box-shadow: 0 8px 32px rgba(229,57,53,0.3); }
+.fm-hero-input {
+  flex: 1; height: 60px; padding: 0 24px; border: 2px solid #2A2A2A; border-right: none; border-radius: 16px 0 0 16px;
+  font-size: 17px; outline: none; background: #141414; color: white;
+}
+.fm-hero-input::placeholder { color: #666; }
+.fm-hero-btn {
+  height: 60px; padding: 0 36px; background: linear-gradient(135deg, #E53935, #FF6F00); color: white; border: none;
+  border-radius: 16px; font-size: 18px; font-weight: 700; cursor: pointer; transition: all 0.2s;
+}
+.fm-hero-btn:hover { background: linear-gradient(135deg, #FF6F00, #E53935); transform: translateY(-2px); }
 
-.hero-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(100px);
-  opacity: 0.12;
+/* Section */
+.fm-cards-section { max-width: 1400px; margin: 0 auto; padding: 60px 24px; }
+.fm-section-title { font-size: 32px; font-weight: 800; margin-bottom: 40px; text-align: center; }
+.fm-card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 20px; }
+.fm-card {
+  background: #1A1A1A; padding: 36px 24px; border-radius: 20px; border: 1px solid #2A2A2A; cursor: pointer;
+  transition: all 0.3s; position: relative; overflow: hidden;
 }
-.orb-1 { width: 500px; height: 500px; background: #6366f1; top: -200px; right: -100px; }
-.orb-2 { width: 400px; height: 400px; background: #c49b4a; bottom: -150px; left: -100px; }
-.orb-3 { width: 300px; height: 300px; background: #8b5cf6; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+.fm-card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: linear-gradient(90deg, var(--card-color, #E53935), var(--card-accent, #FFD600)); opacity: 0; transition: opacity 0.3s;
+}
+.fm-card:hover { transform: translateY(-6px); border-color: var(--card-color, #E53935); box-shadow: 0 12px 40px rgba(229,57,53,0.2); }
+.fm-card:hover::before { opacity: 1; }
+.fm-card-drama { --card-color: #E53935; --card-accent: #FF6F00; }
+.fm-card-script { --card-color: #6366F1; --card-accent: #A78BFA; }
+.fm-card-ad { --card-color: #10B981; --card-accent: #34D399; }
+.fm-card-promo { --card-color: #F59E0B; --card-accent: #FCD34D; }
+.fm-card-ref { --card-color: #8B5CF6; --card-accent: #C4B5FD; }
+.fm-card-icon { font-size: 48px; margin-bottom: 16px; }
+.fm-card h3 { font-size: 22px; font-weight: 700; margin-bottom: 10px; }
+.fm-card p { color: #9E9E9E; font-size: 15px; line-height: 1.5; }
 
-.hero-content { position: relative; z-index: 1; max-width: 800px; margin: 0 auto; }
-.hero-title { font-size: 56px; font-weight: 800; margin-bottom: 16px; line-height: 1.2; text-shadow: 0 2px 12px rgba(0,0,0,0.2); }
-.hero-sub { font-size: 24px; font-weight: 400; opacity: 0.9; margin-bottom: 40px; }
+/* Footer */
+.fm-footer { border-top: 1px solid #2A2A2A; padding: 40px 24px; text-align: center; color: #9E9E9E; }
 
-.hero-search {
-  display: flex; gap: 0; max-width: 700px; margin: 0 auto;
-}
-.hero-input {
-  flex: 1; height: 56px; padding: 0 24px;
-  border: none; border-radius: 10px 0 0 10px;
-  font-size: 17px; outline: none; background: white; color: #1e293b;
-}
-.hero-input::placeholder { color: #94a3b8; }
-.hero-btn {
-  height: 56px; padding: 0 36px;
-  background: #fbbf24; color: #1e293b; border: none;
-  border-radius: 0 10px 10px 0; font-size: 17px; font-weight: 700;
-  cursor: pointer; transition: all 0.2s; white-space: nowrap;
-}
-.hero-btn:hover { background: #f59e0b; transform: translateY(-1px); }
-
-/* ===== Section ===== */
-.main-section {
-  max-width: 1400px; margin: 0 auto; padding: 60px 30px;
-}
-.section-title {
-  font-size: 40px; font-weight: 800; margin-bottom: 36px; color: #1e293b; text-align: center;
-}
-
-/* ===== 创作类型 ===== */
-.creation-types {
-  display: grid; grid-template-columns: repeat(4, 1fr); gap: 30px;
-}
-.type-card {
-  background: white; padding: 48px 24px; border-radius: 20px;
-  text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.06);
-  cursor: pointer; transition: all 0.3s; border: 2px solid transparent;
-}
-.type-card:hover { transform: translateY(-8px); box-shadow: 0 16px 40px rgba(37,99,235,0.15); border-color: #2563eb; }
-.type-icon { font-size: 72px; margin-bottom: 20px; }
-.type-title { font-size: 28px; font-weight: 700; margin-bottom: 12px; color: #1e293b; }
-.type-desc { color: #64748b; font-size: 18px; line-height: 1.5; }
-
-/* ===== 快速入口 ===== */
-.quick-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 30px; }
-.access-card {
-  background: white; padding: 40px 30px; border-radius: 16px;
-  box-shadow: 0 4px 6px rgba(0,0,0,0.06); display: flex; align-items: center; gap: 24px;
-  cursor: pointer; transition: all 0.3s; border: 2px solid transparent;
-}
-.access-card:hover { transform: translateX(6px); border-color: #2563eb; box-shadow: 0 8px 24px rgba(37,99,235,0.12); }
-.access-icon { font-size: 56px; flex-shrink: 0; }
-.access-card h3 { font-size: 26px; font-weight: 700; margin-bottom: 8px; color: #1e293b; }
-.access-card p { color: #64748b; font-size: 18px; }
-
-/* ===== 样片展示 ===== */
-.samples-section { margin-bottom: 80px; }
-.sample-tabs { display: flex; justify-content: center; gap: 16px; margin-bottom: 36px; }
-.sample-tab {
-  padding: 14px 36px; border: 3px solid #e2e8f0; background: white;
-  border-radius: 12px; font-size: 22px; font-weight: 600;
-  cursor: pointer; transition: all 0.2s; color: #475569;
-}
-.sample-tab:hover { border-color: #2563eb; color: #2563eb; }
-.sample-tab.active { background: #2563eb; color: white; border-color: #2563eb; }
-
-.samples-grid {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 24px;
-}
-.sample-card {
-  background: white; border-radius: 14px; overflow: hidden;
-  box-shadow: 0 4px 6px rgba(0,0,0,0.06); transition: all 0.3s; cursor: pointer;
-}
-.sample-card:hover { transform: translateY(-6px); box-shadow: 0 12px 32px rgba(0,0,0,0.12); }
-.sample-thumb { height: 200px; display: flex; align-items: center; justify-content: center; font-size: 64px; }
-.sample-info { padding: 22px; }
-.sample-title { font-size: 22px; font-weight: 700; margin-bottom: 8px; color: #1e293b; }
-.sample-meta { color: #64748b; font-size: 16px; }
-
-/* ===== Footer ===== */
-.footer { background: #1e293b; color: white; padding: 40px 30px; text-align: center; }
-.footer p { opacity: 0.8; }
-
-/* ===== Responsive ===== */
-@media (max-width: 1024px) {
-  .creation-types { grid-template-columns: repeat(2, 1fr); }
-  .quick-grid { grid-template-columns: 1fr; }
-  .hero-title { font-size: 42px; }
-  .hero-sub { font-size: 20px; }
-}
 @media (max-width: 768px) {
-  .creation-types { grid-template-columns: 1fr; }
-  .samples-grid { grid-template-columns: 1fr; }
-  .hero { padding: 50px 20px; }
-  .hero-title { font-size: 32px; }
-  .hero-search { flex-direction: column; }
-  .hero-input { border-radius: 10px; margin-bottom: 12px; }
-  .hero-btn { border-radius: 10px; }
-  .section-title { font-size: 30px; }
-  .main-section { padding: 40px 16px; }
+  .fm-hero-title { font-size: 40px; }
+  .fm-hero-sub { font-size: 22px; }
+  .fm-hero-search { flex-direction: column; border-radius: 12px; }
+  .fm-hero-input { border-radius: 12px 12px 0 0; border-right: 2px solid #2A2A2A; }
+  .fm-hero-btn { border-radius: 0 0 12px 12px; height: auto; padding: 16px; }
+  .fm-card-grid { grid-template-columns: 1fr; }
 }
 </style>

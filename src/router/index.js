@@ -5,6 +5,9 @@ const routes = [
   { path: "/create", name: "Create", component: () => import("@/views/CreatePage.vue"), meta: { title: "创作工作台" } },
   { path: "/create/pro", name: "ProCreate", component: () => import("@/views/ProCreatePage.vue"), meta: { title: "专业共创模式" } },
   { path: "/create/faceswap/:characterId", name: "FaceSwap", component: () => import("@/views/create/FaceSwap.vue"), meta: { title: "角色换装" } },
+  { path: "/create/ad", name: "AdCreate", component: () => import("@/views/AdCreatePage.vue"), meta: { title: "广告片创作" } },
+  { path: "/create/promo", name: "PromoCreate", component: () => import("@/views/PromoCreatePage.vue"), meta: { title: "宣传片制作" } },
+  { path: "/create/ref-video", name: "RefVideo", component: () => import("@/views/ModePage.vue"), meta: { title: "参考视频模仿" } },
   { path: "/track/:id", name: "Track", component: () => import("@/views/TrackPage.vue"), meta: { title: "进度" } },
   { path: "/result/:id", name: "Result", component: () => import("@/views/ResultPage.vue"), meta: { title: "作品" } },
   { path: "/profile", name: "Profile", component: () => import("@/views/ProfilePage.vue"), meta: { title: "个人中心" } },
@@ -23,10 +26,11 @@ const routes = [
 
 const router = createRouter({ history: createWebHistory(), routes })
 
+const publicPages = ["/", "/login", "/register", "/create", "/create/ad", "/create/promo", "/create/ref-video", "/create/pro", "/membership", "/payment", "/media", "/market", "/api-keys", "/script-chat", "/result", "/mode"]
+
 router.beforeEach((to, from, next) => {
-  const pub = ["/", "/login", "/register", "/create/pro", "/create", "/membership", "/payment", "/media", "/market", "/api-keys", "/script-chat", "/result", "/mode"]
   const token = localStorage.getItem("token")
-  if (!token && !pub.includes(to.path)) { next("/login") }
+  if (!token && !publicPages.includes(to.path)) { next("/login") }
   else { next() }
 })
 

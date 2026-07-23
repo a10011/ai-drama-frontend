@@ -1,82 +1,63 @@
 <template>
-  <div class="ad-create-page">
-    <div class="page-header">
-      <h1>📺 广告片创作</h1>
-      <p class="subtitle">AI 驱动，快速生成专业级广告视频</p>
-    </div>
-    
-    <div class="content-area">
-      <!-- 广告类型选择 -->
-      <div class="ad-types">
-        <div class="type-card active" @click="selectedType = 'product'">
-          <span class="type-icon">📦</span>
-          <h3>产品展示</h3>
-          <p>突出产品特点和使用场景</p>
-        </div>
-        <div class="type-card" @click="selectedType = 'brand'">
-          <span class="type-icon">🏢</span>
-          <h3>品牌形象</h3>
-          <p>传递品牌理念和价值观</p>
-        </div>
-        <div class="type-card" @click="selectedType = 'promo'">
-          <span class="type-icon">🎉</span>
-          <h3>促销推广</h3>
-          <p>限时优惠和促销活动</p>
-        </div>
-      </div>
-      
-      <!-- 输入区域 -->
-      <div class="input-section">
-        <div class="form-group">
-          <label>广告标题</label>
-          <input v-model="title" placeholder="输入广告标题" />
-        </div>
-        <div class="form-group">
-          <label>产品描述</label>
-          <textarea v-model="description" placeholder="描述您的产品或服务..." rows="4"></textarea>
-        </div>
-        <div class="form-group">
-          <label>目标受众</label>
-          <select v-model="audience">
-            <option value="young">年轻人 (18-30岁)</option>
-            <option value="adult">成年人 (30-50岁)</option>
-            <option value="senior">老年人 (50岁以上)</option>
-            <option value="general">全年龄段</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>视频时长</label>
-          <select v-model="duration">
-            <option value="15">15秒</option>
-            <option value="30">30秒</option>
-            <option value="60">60秒</option>
-          </select>
-        </div>
-        <button class="generate-btn" @click="generateAd" :disabled="!isValid">
-          <span v-if="loading">⏳ 生成中...</span>
-          <span v-else>🎬 生成广告片</span>
-        </button>
-      </div>
-      
-      <!-- 生成结果 -->
-      <div class="result-section" v-if="result">
-        <div class="result-header">
-          <h3>生成结果</h3>
-          <button class="btn-download" @click="downloadResult">📥 下载</button>
-        </div>
-        <div class="result-content">
-          <div class="result-preview">
-            <video v-if="result.video_url" :src="result.video_url" controls class="preview-video"></video>
-            <div v-else class="preview-placeholder">
-              <span>🎬</span>
-              <p>视频生成中...</p>
+  <div class="fm-ad-create">
+    <!-- Header -->
+    <header class="fm-ad-header">
+      <h1 class="fm-ad-title">📺 广告片创作</h1>
+      <p class="fm-ad-desc">AI 驱动，快速生成专业级广告视频</p>
+    </header>
+
+    <div class="fm-ad-body">
+      <div class="fm-ad-form">
+        <div class="fm-form-group">
+          <label>广告类型</label>
+          <div class="fm-type-grid">
+            <div v-for="t in adTypes" :key="t.value"
+                 class="fm-type-card" :class="{ active: selectedType === t.value }"
+                 @click="selectedType = t.value">
+              <div class="fm-type-icon">{{ t.icon }}</div>
+              <h3>{{ t.name }}</h3>
             </div>
           </div>
-          <div class="result-details">
-            <h4>广告脚本</h4>
-            <pre class="script-text">{{ result.script }}</pre>
+        </div>
+
+        <div class="fm-form-group">
+          <label>产品名称</label>
+          <input v-model="productName" class="fm-input" placeholder="例如：某品牌手机"/>
+        </div>
+
+        <div class="fm-form-group">
+          <label>目标受众</label>
+          <select v-model="targetAudience" class="fm-select">
+            <option value="年轻人群">年轻人群</option>
+            <option value="职场人士">职场人士</option>
+            <option value="家庭用户">家庭用户</option>
+            <option value="全年龄">全年龄</option>
+          </select>
+        </div>
+
+        <div class="fm-form-group">
+          <label>核心卖点（3个以内）</label>
+          <textarea v-model="sellingPoints" class="fm-textarea" rows="4" placeholder="列出产品的核心卖点..."></textarea>
+        </div>
+
+        <div class="fm-form-group">
+          <label>风格偏好</label>
+          <div class="fm-style-options">
+            <span v-for="s in styles" :key="s"
+                  class="fm-style-tag" :class="{ active: selectedStyle === s }"
+                  @click="selectedStyle = s">{{ s }}</span>
           </div>
         </div>
+
+        <button class="fm-generate-btn" @click="generateAd" :disabled="loading">
+          {{ loading ? '生成中...' : '一键生成广告方案' }}
+        </button>
+      </div>
+
+      <!-- 生成结果 -->
+      <div v-if="result" class="fm-ad-result">
+        <h2>生成结果</h2>
+        <div class="fm-result-content">{{ result }}</div>
       </div>
     </div>
   </div>
@@ -87,300 +68,92 @@ export default {
   data() {
     return {
       selectedType: 'product',
-      title: '',
-      description: '',
-      audience: 'young',
-      duration: '30',
+      productName: '',
+      targetAudience: '年轻人群',
+      sellingPoints: '',
+      selectedStyle: '高级感',
       loading: false,
-      result: null,
-    }
-  },
-  computed: {
-    isValid() {
-      return this.title.trim() && this.description.trim()
-    },
-    typeLabel() {
-      const labels = { product: '产品展示', brand: '品牌形象', promo: '促销推广' }
-      return labels[this.selectedType] || ''
+      result: '',
+      adTypes: [
+        { icon: '📦', name: '产品展示', value: 'product' },
+        { icon: '🏢', name: '品牌形象', value: 'brand' },
+        { icon: '🔥', name: '促销活动', value: 'promo' },
+        { icon: '🎬', name: '短视频广告', value: 'short' },
+      ],
+      styles: ['高级感', '温馨家庭', '科技感', '幽默搞笑', '励志感人']
     }
   },
   methods: {
     async generateAd() {
-      this.loading = true
-      this.result = null
-      
+      this.loading = true;
       try {
-        // 这里应该调用后端 API
-        // const response = await fetch('/api/v1/ad/create', {
-        //   method: 'POST',
-        //   headers: { 'Content-Type': 'application/json' },
-        //   body: JSON.stringify({
-        //     type: this.selectedType,
-        //     title: this.title,
-        //     description: this.description,
-        //     audience: this.audience,
-        //     duration: this.duration,
-        //   }),
-        // })
-        // const data = await response.json()
-        // this.result = data
-        
-        // 模拟生成
+        const body = {
+          type: this.selectedType,
+          product: this.productName,
+          audience: this.targetAudience,
+          points: this.sellingPoints,
+          style: this.selectedStyle
+        };
+        // TODO: Call backend API
         setTimeout(() => {
-          this.result = {
-            script: `[广告脚本]\n标题: ${this.title}\n类型: ${this.typeLabel}\n时长: ${this.duration}秒\n\n[开场]\n展示产品外观和使用场景\n\n[主体]\n介绍产品特点和优势\n\n[结尾]\n呼吁行动，展示购买链接`,
-            video_url: '',
-          }
-          this.loading = false
-        }, 2000)
-      } catch (error) {
-        alert('生成失败: ' + error.message)
-        this.loading = false
+          this.result = '这是生成的广告文案和分镜方案...';
+          this.loading = false;
+        }, 2000);
+      } catch (e) {
+        this.result = '生成失败：' + e.message;
+        this.loading = false;
       }
-    },
-    
-    downloadResult() {
-      if (this.result && this.result.video_url) {
-        window.open(this.result.video_url, '_blank')
-      } else {
-        // 下载脚本
-        const blob = new Blob([this.result.script], { type: 'text/plain' })
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `${this.title}_广告脚本.txt`
-        a.click()
-        URL.revokeObjectURL(url)
-      }
-    },
-  },
+    }
+  }
 }
 </script>
 
 <style scoped>
-.ad-create-page {
-  min-height: 100vh;
-  background: var(--bg-primary);
-  color: var(--text-primary);
-  font-family: 'Inter', 'Noto Sans SC', -apple-system, sans-serif;
+.fm-ad-create { background: #0A0A0A; min-height: 100vh; color: white; padding-bottom: 60px; }
+.fm-ad-header {
+  padding: 40px 24px; text-align: center; border-bottom: 1px solid #2A2A2A;
+  background: linear-gradient(180deg, rgba(16,185,129,0.08), transparent);
 }
-
-.page-header {
-  text-align: center;
-  padding: 40px 20px;
-  background: linear-gradient(135deg, rgba(99,102,241,0.1) 0%, rgba(139,92,246,0.05) 100%);
+.fm-ad-title { font-size: 36px; font-weight: 800; margin-bottom: 8px; }
+.fm-ad-desc { color: #9E9E9E; font-size: 16px; }
+.fm-ad-body { max-width: 1000px; margin: 0 auto; padding: 40px 24px; }
+.fm-form-group { margin-bottom: 30px; }
+.fm-form-group label { display: block; font-size: 15px; font-weight: 600; margin-bottom: 12px; color: #E0E0E0; }
+.fm-type-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 16px; }
+.fm-type-card {
+  background: #1A1A1A; padding: 24px 16px; border-radius: 12px; border: 2px solid #2A2A2A;
+  text-align: center; cursor: pointer; transition: all 0.2s;
 }
-
-.page-header h1 {
-  font-size: 32px;
-  font-weight: 800;
-  margin-bottom: 8px;
+.fm-type-card:hover, .fm-type-card.active { border-color: #10B981; background: rgba(16,185,129,0.1); }
+.fm-type-icon { font-size: 40px; margin-bottom: 8px; }
+.fm-type-card h3 { font-size: 16px; font-weight: 600; }
+.fm-input, .fm-select, .fm-textarea {
+  width: 100%; padding: 14px 18px; background: #141414; border: 1px solid #2A2A2A;
+  border-radius: 10px; color: white; font-size: 15px; outline: none; font-family: inherit;
 }
-
-.subtitle {
-  font-size: 16px;
-  color: var(--text-secondary);
+.fm-input:focus, .fm-select:focus, .fm-textarea:focus { border-color: #10B981; }
+.fm-textarea { resize: vertical; }
+.fm-select {
+  appearance: none;
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23999"><path d="M7 10l5 5 5-5z"/></svg>');
+  background-repeat: no-repeat;
+  background-position: right 14px;
+  padding-right: 40px;
 }
-
-.content-area {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 40px 20px;
+.fm-style-options { display: flex; flex-wrap: wrap; gap: 10px; }
+.fm-style-tag {
+  padding: 8px 18px; border-radius: 20px; background: #1A1A1A; border: 1px solid #2A2A2A;
+  font-size: 14px; cursor: pointer; transition: all 0.2s;
 }
-
-/* 广告类型选择 */
-.ad-types {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 16px;
-  margin-bottom: 40px;
+.fm-style-tag:hover, .fm-style-tag.active { border-color: #10B981; background: rgba(16,185,129,0.15); }
+.fm-generate-btn {
+  width: 100%; padding: 16px; background: linear-gradient(135deg, #10B981, #34D399); color: white;
+  border: none; border-radius: 12px; font-size: 17px; font-weight: 700; cursor: pointer; transition: all 0.2s;
 }
-
-.type-card {
-  padding: 24px;
-  background: var(--bg-card);
-  border: 2px solid var(--border);
-  border-radius: 16px;
-  text-align: center;
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
-.type-card:hover {
-  border-color: var(--accent);
-  transform: translateY(-2px);
-}
-
-.type-card.active {
-  border-color: var(--accent);
-  background: rgba(99,102,241,0.1);
-}
-
-.type-icon {
-  font-size: 32px;
-  display: block;
-  margin-bottom: 12px;
-}
-
-.type-card h3 {
-  font-size: 16px;
-  font-weight: 700;
-  margin-bottom: 6px;
-}
-
-.type-card p {
-  font-size: 13px;
-  color: var(--text-muted);
-}
-
-/* 输入区域 */
-.input-section {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 24px;
-  margin-bottom: 40px;
-}
-
-.form-group {
-  margin-bottom: 20px;
-}
-
-.form-group label {
-  display: block;
-  font-size: 14px;
-  font-weight: 600;
-  margin-bottom: 6px;
-  color: var(--text-secondary);
-}
-
-.form-group input,
-.form-group textarea,
-.form-group select {
-  width: 100%;
-  padding: 12px 16px;
-  background: var(--bg-input);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--text-primary);
-  font-size: 14px;
-  outline: none;
-  transition: border-color 0.2s;
-}
-
-.form-group input:focus,
-.form-group textarea:focus,
-.form-group select:focus {
-  border-color: var(--accent);
-}
-
-.form-group textarea {
-  resize: vertical;
-  font-family: inherit;
-}
-
-.generate-btn {
-  width: 100%;
-  padding: 14px;
-  background: linear-gradient(135deg, #c49b4a, #d4b35a);
-  color: #fff;
-  border: none;
-  border-radius: 12px;
-  font-size: 16px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.generate-btn:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(196,155,74,0.3);
-}
-
-.generate-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* 结果区域 */
-.result-section {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 24px;
-}
-
-.result-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
-
-.result-header h3 {
-  font-size: 18px;
-  font-weight: 700;
-}
-
-.btn-download {
-  padding: 8px 16px;
-  background: var(--accent);
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.result-content {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 24px;
-}
-
-.preview-video {
-  width: 100%;
-  border-radius: 12px;
-}
-
-.preview-placeholder {
-  width: 100%;
-  height: 200px;
-  background: var(--bg-primary);
-  border-radius: 12px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-muted);
-}
-
-.preview-placeholder span {
-  font-size: 48px;
-  margin-bottom: 12px;
-}
-
-.script-text {
-  background: var(--bg-primary);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 16px;
-  font-size: 13px;
-  line-height: 1.6;
-  white-space: pre-wrap;
-  color: var(--text-secondary);
-  max-height: 300px;
-  overflow-y: auto;
-}
-
-@media (max-width: 768px) {
-  .result-content {
-    grid-template-columns: 1fr;
-  }
-  
-  .ad-types {
-    grid-template-columns: 1fr;
-  }
-}
+.fm-generate-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(16,185,129,0.3); }
+.fm-generate-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.fm-ad-result { margin-top: 40px; padding: 30px; background: #1A1A1A; border-radius: 16px; border: 1px solid #2A2A2A; }
+.fm-ad-result h2 { margin-bottom: 20px; font-size: 24px; }
+.fm-result-content { line-height: 1.8; color: #E0E0E0; white-space: pre-wrap; }
+@media (max-width: 768px) { .fm-type-grid { grid-template-columns: 1fr; } }
 </style>

@@ -1,57 +1,40 @@
 <template>
-  <div id="app">
-    <header class="topbar" v-if="$route.path !== '/login' && $route.path !== '/register'">
-      <div class="topbar-inner">
-        <!-- Logo -->
-        <router-link to="/" class="logo">
-          🎬 AI短剧
+  <div class="fm-app">
+    <!-- 顶部导航 -->
+    <header class="fm-topbar" v-if="$route.path !== '/login' && $route.path !== '/register'">
+      <div class="fm-topbar-inner">
+        <router-link to="/" class="fm-logo">
+          <span class="fm-logo-icon">🎬</span>
+          <span class="fm-logo-text">AI面剧场</span>
         </router-link>
 
-        <!-- 导航菜单 -->
-        <nav class="nav-menu">
-          <router-link to="/" class="nav-item" active-class="active">首页</router-link>
-          <router-link to="/projects" class="nav-item" active-class="active">我的作品</router-link>
-          <router-link to="/payment" class="nav-item" active-class="active">充值中心</router-link>
-          <router-link to="/media" class="nav-item" active-class="active">素材库</router-link>
-          <a href="https://mzsh.top" class="nav-item" target="_blank">帮助中心</a>
+        <nav class="fm-nav">
+          <router-link to="/mode" class="fm-nav-item">短剧工作台</router-link>
+          <router-link to="/script-chat" class="fm-nav-item">写剧本</router-link>
+          <router-link to="/create/ad" class="fm-nav-item">广告片</router-link>
+          <router-link to="/create/promo" class="fm-nav-item">宣传片</router-link>
+          <router-link to="/projects" class="fm-nav-item">我的作品</router-link>
+          <router-link to="/media" class="fm-nav-item">素材库</router-link>
         </nav>
 
-        <!-- 右侧操作区 -->
-        <div class="nav-right">
-          <button v-if="!token" class="btn btn-secondary" @click="$router.push('/login')">登录</button>
-          <button v-if="!token" class="btn btn-primary" @click="$router.push('/register')">注册</button>
-
-          <template v-else>
-            <!-- 算力 -->
-            <div class="power-badge" :class="{ 'power-guest': !token }" @click="token ? null : $router.push('/login')">
-              <span class="power-icon">⚡</span>
-              <span v-if="token" class="power-value">{{ creditDisplay }}</span>
-              <span v-else class="power-value">登录</span>
+        <div class="fm-user-area">
+          <div v-if="!token" class="fm-auth-buttons">
+            <button class="fm-btn fm-btn-ghost" @click="$router.push('/login')">登录</button>
+            <button class="fm-btn fm-btn-primary" @click="$router.push('/register')">注册</button>
+          </div>
+          <div v-else class="fm-user-dropdown">
+            <div class="fm-avatar">{{ userInitial }}</div>
+            <div class="fm-user-info">
+              <div class="fm-username">{{ username }}</div>
+              <div class="fm-tier">{{ tierName }}</div>
             </div>
-
-            <!-- 用户头像下拉 -->
-            <div class="user-dropdown" @click="showUserMenu = !showUserMenu" ref="userMenuRef">
-              <div class="avatar" :style="{ background: avatarGradient }">{{ userInitial }}</div>
-              <div class="dropdown-menu" v-if="showUserMenu" @click.stop>
-                <div class="dropdown-user-info">
-                  <div class="dropdown-avatar">{{ userInitial }}</div>
-                  <div class="dropdown-user-detail">
-                    <div class="dropdown-username">{{ username || '用户' }}</div>
-                    <div class="dropdown-tier">{{ tierName }}</div>
-                  </div>
-                </div>
-                <div class="dropdown-divider"></div>
-                <div class="dropdown-item" @click="$router.push('/profile')">👤 个人中心</div>
-                <div class="dropdown-divider"></div>
-                <div class="dropdown-item danger" @click="logout">🔓 退出登录</div>
-              </div>
-            </div>
-          </template>
+            <button class="fm-btn fm-btn-ghost fm-btn-sm" @click="logout">退出</button>
+          </div>
         </div>
       </div>
     </header>
 
-    <main class="main-content">
+    <main class="fm-main">
       <router-view />
     </main>
   </div>
@@ -61,246 +44,149 @@
 export default {
   data() {
     return {
-      creditBalance: 0,
-      userTier: '',
-      username: '',
-      token: '',
-      showUserMenu: false,
+      token: localStorage.getItem('token') || '',
+      username: localStorage.getItem('username') || '',
+      tier: localStorage.getItem('tier') || '免费版',
     }
   },
   computed: {
-    creditDisplay() {
-      if (!this.token) return '—'
-      return this.creditBalance
-    },
     userInitial() {
-      const name = this.username || localStorage.getItem('username') || 'U'
-      return name.charAt(0).toUpperCase()
+      return (this.username || 'U').charAt(0).toUpperCase()
     },
     tierName() {
-      return { pro: '专业会员', enterprise: '企业版' }[this.userTier] || '免费版'
-    },
-    avatarGradient() {
-      const gradients = [
-        'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-        'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-        'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-      ]
-      const hash = (this.username || 'U').split('').reduce((a, b) => a + b.charCodeAt(0), 0)
-      return gradients[hash % gradients.length]
+      return this.tier || '免费版'
     }
   },
   methods: {
-    authHeaders() {
-      return { 'Authorization': 'Bearer ' + this.token }
-    },
-    async loadBalance() {
-      try {
-        if (!this.token) return
-        const r = await fetch('/v2/balance/check', { headers: this.authHeaders() }).then(r => r.json())
-        if (r.success) this.creditBalance = r.data.balance
-      } catch (e) {}
-    },
-    async loadUserInfo() {
-      try {
-        if (!this.token) return
-        const r = await fetch('/v2/auth/me', { headers: this.authHeaders() }).then(r => r.json())
-        if (r.success) {
-          this.username = r.data.username || ''
-          this.userTier = r.data.tier || ''
-          localStorage.setItem('username', this.username)
-        }
-      } catch (e) {}
-    },
     logout() {
       localStorage.removeItem('token')
       localStorage.removeItem('username')
       this.token = ''
       this.username = ''
-      this.creditBalance = 0
       this.$router.push('/login')
-      this.showUserMenu = false
-    },
-    handleClickOutside(e) {
-      if (this.$refs.userMenuRef && !this.$refs.userMenuRef.contains(e.target)) {
-        this.showUserMenu = false
-      }
     }
-  },
-  mounted() {
-    this.token = localStorage.getItem('token') || ''
-    if (this.token) {
-      this.loadBalance()
-      this.loadUserInfo()
-    }
-    document.addEventListener('click', this.handleClickOutside)
-  },
-  beforeUnmount() {
-    document.removeEventListener('click', this.handleClickOutside)
   }
 }
 </script>
 
-<style>
-* { margin: 0; padding: 0; box-sizing: border-box; }
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background: #f5f7fa;
-  color: #333;
+<style scoped>
+.fm-app {
+  min-height: 100vh;
+  background: #0A0A0A;
+  color: #FFFFFF;
 }
 
-/* ===== 顶部导航 ===== */
-.topbar {
-  background: white;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+/* 顶部导航 */
+.fm-topbar {
   position: sticky;
   top: 0;
   z-index: 100;
+  background: rgba(10,10,10,0.95);
+  border-bottom: 1px solid #2A2A2A;
+  backdrop-filter: blur(20px);
 }
-.topbar-inner {
+.fm-topbar-inner {
   max-width: 1400px;
   margin: 0 auto;
-  padding: 25px 30px;
+  padding: 0 24px;
+  height: 60px;
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 24px;
 }
 
-.logo {
-  font-size: 42px;
-  font-weight: bold;
-  color: #2563eb;
-  text-decoration: none;
-}
-
-.nav-menu {
+.fm-logo {
   display: flex;
-  gap: 50px;
-}
-
-.nav-item {
-  color: #475569;
-  text-decoration: none;
-  font-size: 24px;
-  font-weight: 700;
-  transition: color 0.2s;
-  cursor: pointer;
-}
-.nav-item:hover { color: #2563eb; }
-.nav-item.active { color: #2563eb; }
-
-.nav-right {
-  display: flex;
-  gap: 25px;
   align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  color: white;
+  flex-shrink: 0;
+}
+.fm-logo-icon { font-size: 24px; }
+.fm-logo-text {
+  font-size: 18px;
+  font-weight: 800;
+  background: linear-gradient(90deg, #E53935, #FFD600);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
-.btn {
-  padding: 18px 40px;
-  border-radius: 12px;
-  cursor: pointer;
-  font-size: 22px;
+.fm-nav {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+}
+.fm-nav-item {
+  color: #9E9E9E;
+  text-decoration: none;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 14px;
   transition: all 0.2s;
 }
-.btn-primary { background: #2563eb; color: white; border: none; }
-.btn-primary:hover { background: #1d4ed8; }
-.btn-secondary { background: white; color: #2563eb; border: 1px solid #2563eb; }
-.btn-secondary:hover { background: #eff6ff; }
-
-.power-badge {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 18px;
-  border-radius: 20px;
-  background: #f1f5f9;
-  font-size: 16px;
-  font-weight: 600;
-  cursor: default;
-}
-.power-value { color: #1e293b; }
-
-.avatar {
-  width: 42px;
-  height: 42px;
-  border-radius: 50%;
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
-  font-weight: 700;
-  cursor: pointer;
+.fm-nav-item:hover, .fm-nav-item.active {
+  color: white;
+  background: rgba(229,57,53,0.15);
 }
 
-.dropdown-menu {
-  position: absolute;
-  top: 50px;
-  right: 0;
-  width: 220px;
-  background: white;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
-  z-index: 200;
-}
-
-.dropdown-user-info {
+.fm-user-area {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 16px;
-  background: #f8fafc;
 }
-
-.dropdown-avatar {
-  width: 40px;
-  height: 40px;
+.fm-auth-buttons {
+  display: flex;
+  gap: 8px;
+}
+.fm-avatar {
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #2563eb, #7c3aed);
-  color: #fff;
+  background: linear-gradient(135deg, #E53935, #FF6F00);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
   font-weight: 700;
-}
-
-.dropdown-user-detail { flex: 1; min-width: 0; }
-.dropdown-username { font-size: 14px; font-weight: 600; color: #1e293b; }
-.dropdown-tier { font-size: 12px; color: #64748b; margin-top: 2px; }
-
-.dropdown-divider {
-  height: 1px;
-  background: #e2e8f0;
-  margin: 0;
-}
-
-.dropdown-item {
-  display: flex;
-  align-items: center;
-  padding: 10px 16px;
   font-size: 14px;
-  color: #475569;
-  cursor: pointer;
+}
+.fm-user-info {
+  display: flex;
+  flex-direction: column;
+}
+.fm-username { font-size: 14px; font-weight: 600; }
+.fm-tier { font-size: 12px; color: #9E9E9E; }
+
+/* 按钮 */
+.fm-btn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
   transition: all 0.2s;
 }
-.dropdown-item:hover { background: #eff6ff; color: #2563eb; }
-.dropdown-item.danger { color: #ef4444; }
-.dropdown-item.danger:hover { background: #fef2f2; color: #dc2626; }
+.fm-btn-primary {
+  background: linear-gradient(135deg, #E53935, #FF6F00);
+  color: white;
+  border: none;
+}
+.fm-btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(229,57,53,0.4); }
+.fm-btn-ghost {
+  background: transparent;
+  color: #9E9E9E;
+  border: 1px solid #2A2A2A;
+}
+.fm-btn-ghost:hover { color: white; border-color: #555; }
+.fm-btn-sm { padding: 6px 12px; font-size: 13px; }
 
-/* ===== 主内容区 ===== */
-.main-content {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 60px 30px;
+/* 主内容区 */
+.fm-main {
+  min-height: calc(100vh - 60px);
+  padding-top: 60px;
 }
 
 @media (max-width: 768px) {
-  .topbar-inner { padding: 16px; }
-  .logo { font-size: 28px; }
-  .nav-menu { display: none; }
-  .main-content { padding: 24px 16px; }
+  .fm-topbar-inner { padding: 0 16px; gap: 12px; }
+  .fm-nav { display: none; }
 }
 </style>
