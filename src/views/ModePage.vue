@@ -797,16 +797,11 @@ export default {
       this.output = ''
       this.shots = []
       try {
-        const url = this.mode === 'drama' ? '/api/v1/hermes/quick' : '/api/v1/command'
-        const r = await request.post(url, {
-          type: this.mode === 'drama' ? 'script' : this.mode,
-          prompt: this.prompt,
-          subject: this.subject,
-          character: this.character,
-          duration: this.duration,
-        }, { headers: this.auth(), timeout: 120000 })
+        const url = '/api/v1/script-wf/chat'
+        const promptText = this.mode === 'drama' ? (this.prompt || this.subject) : (this.prompt || this.subject)
+        const r = await request.post(url, { message: promptText }, { headers: this.auth(), timeout: 120000 })
         const d = r.data
-        this.output = d.script || d.data?.script || d.data?.text || JSON.stringify(d.data, null, 2) || '(无结果)'
+        this.output = d.data?.data?.script || d.data?.data?.content || d.data?.script || d.data?.content || JSON.stringify(d.data, null, 2) || '(无结果)'
         this.genShots()
         this.extractChars()
       } catch (e) {
@@ -1008,7 +1003,7 @@ export default {
       this.chatInput = ''
       this.chatLoading = true
       try {
-        const r = await request.post('/api/v1/hermes/quick', {
+        const r = await request.post('/api/v1/script-wf/chat', {
           prompt: msg,
           mode: 'chat',
           subject: this.subject,
